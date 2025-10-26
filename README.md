@@ -1,8 +1,8 @@
 # 🛜 NetShift 🌐 
 
-NetShift is a small Windows tray utility that monitors internet connectivity and automatically switches between Ethernet and Wi‑Fi adapters using `netsh`. It displays a tray icon for the active/available network state and provides context-menu actions to force Ethernet or Wi‑Fi.
+NetShift is a small Windows tray utility that monitors internet connectivity and automatically switches between Ethernet and Wi‑Fi adapters using `netsh`. It displays a tray icon (green/yellow/red) for the active/available network state and provides context-menu actions to force Ethernet or Wi‑Fi.
 
-
+---
 
 ## 🔑 Key features
 - Automatic network failover: switches to Wi‑Fi when Ethernet loses connectivity and back to Ethernet when connectivity is restored.
@@ -10,6 +10,7 @@ NetShift is a small Windows tray utility that monitors internet connectivity and
 - Manual "Force Ethernet" / "Force Wi‑Fi" actions via the tray context menu.
 - Configurable ping target and check interval.
 - Lightweight logging to log.txt for diagnostics (this will be removed in the final version).
+- Implements debounce/hysteresis to avoid rapid switching on unstable networks.
 
 
 ## 📋 Requirements
@@ -33,6 +34,8 @@ EthernetName — "Ethernet", //adapter name (or substring) for the Ethernet inte
 WiFiName — "8HzWANIP",     //adapter name (or substring/description) for the Wi‑Fi interface.
 PingTarget — 8.8.8.8,      //host to ping to verify internet (default: 8.8.8.8).
 CheckIntervalSeconds — 15  //polling interval in seconds.
+DebounceSeconds — 2,       //wait this long (in seconds) after connectivity change before switching (to prevent flapping).
+HysteresisMinutes — 5      //minimum duration (in seconds) for a connection state before considering revert (helps stabilize transitions).
 ```
 ## 🛠️ Troubleshooting
 
@@ -64,4 +67,3 @@ Using Visual Studio 2022
 ## License
 
 [MIT](https://github.com/StianSundby/NetShift/blob/main/LICENSE)
-
