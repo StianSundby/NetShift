@@ -1,8 +1,4 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using NetShift.Core;
+﻿using NetShift.Core;
 using NetShift.Utils;
 
 namespace NetShift
@@ -79,7 +75,7 @@ namespace NetShift
                 {
                     try
                     {
-                        await _netManager.MonitorNetworkAsync(token);
+                        await _netManager!.MonitorNetworkAsync(token);
                     }
                     catch (Exception ex)
                     {
@@ -88,7 +84,7 @@ namespace NetShift
 
                     try
                     {
-                        await Task.Delay(TimeSpan.FromSeconds(_config.CheckIntervalSeconds), token);
+                        await Task.Delay(TimeSpan.FromSeconds(_config!.CheckIntervalSeconds), token);
                     }
                     catch (TaskCanceledException)
                     {
