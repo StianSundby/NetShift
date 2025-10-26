@@ -2,7 +2,6 @@
 using NetShift.Utils;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
-using System.Threading;
 
 namespace NetShift
 {
@@ -10,18 +9,31 @@ namespace NetShift
     {
         private readonly Config _config;
         private volatile bool _ethernetActive = true;
-        private int _isSwitchingInt = 0; // use Interlocked to guard switching
+        private int _isSwitchingInt = 0;
         private readonly TimeSpan _pingTimeout = TimeSpan.FromMilliseconds(2000);
+
+        //debounce/hysteresis state
+        private int _consecutiveFailures = 0;
+        private int _consecutiveSuccesses = 0;
+        private readonly int _failureThreshold;
+        private readonly int _successThreshold;
+        private readonly TimeSpan _minWifiUptime;
+        private DateTime _lastSwitchedToWifi = DateTime.MinValue;
 
         public event Action<string, string>? StatusChanged;
         public event Action<string>? IconChanged;
 
-        public NetworkManager(Config config) => _config = config ?? throw new ArgumentNullException(nameof(config));
+        public NetworkManager(Config config)
+        {
+            _config = config ?? throw new ArgumentNullException(nameof(config));
+            _failureThreshold = Math.Max(1, _config.FailureThreshold);
+            _successThreshold = Math.Max(1, _config.SuccessThreshold);
+            _minWifiUptime = TimeSpan.FromSeconds(Math.Max(0, _config.MinWifiUptimeSeconds));
+        }
 
-        // Keeps backward compatibility: token is optional
         public async Task MonitorNetworkAsync(CancellationToken cancellationToken = default)
         {
-            // ensure only one switch attempt at a time
+            //ensure only one switch attempt at a time
             if (Interlocked.CompareExchange(ref _isSwitchingInt, 1, 0) == 1) return;
 
             try
@@ -29,23 +41,55 @@ namespace NetShift
                 bool internetOk = await TestInternetAsync(cancellationToken).ConfigureAwait(false);
                 Logger.Log($"Ping to {_config.PingTarget}: {(internetOk ? "Success" : "Failed")}");
 
-                if (_ethernetActive && !internetOk)
+                if (!internetOk)
                 {
-                    StatusChanged?.Invoke("Switching Network", "Switching from Ethernet to Wi-Fi...");
-                    await SwitchToWiFi(cancellationToken).ConfigureAwait(false);
-                    IconChanged?.Invoke("wifi");
-                    StatusChanged?.Invoke("Active Network", "Now using Wi-Fi");
+                    _consecutiveFailures++;
+                    _consecutiveSuccesses = 0;
+                    Logger.Log($"Consecutive failures: {_consecutiveFailures}");
+
+                    if (_ethernetActive)
+                    {
+                        if (_consecutiveFailures >= _failureThreshold)
+                        {
+                            StatusChanged?.Invoke("Switching Network", "Switching from Ethernet to Wi-Fi...");
+                            await SwitchToWiFi(cancellationToken).ConfigureAwait(false);
+                            _lastSwitchedToWifi = DateTime.UtcNow;
+                            IconChanged?.Invoke("wifi");
+                            StatusChanged?.Invoke("Active Network", "Now using Wi-Fi");
+                            _consecutiveFailures = 0;
+                            _consecutiveSuccesses = 0;
+                        }
+                        else IconChanged?.Invoke("none");
+                    }
+                    else IconChanged?.Invoke("none");
+                    
                 }
-                else if (!_ethernetActive && internetOk)
+                else
                 {
-                    StatusChanged?.Invoke("Switching Network", "Switching from Wi-Fi to Ethernet...");
-                    await SwitchToEthernet(cancellationToken).ConfigureAwait(false);
-                    IconChanged?.Invoke("ethernet");
-                    StatusChanged?.Invoke("Active Network", "Now using Ethernet");
-                }
-                else if (!internetOk)
-                {
-                    IconChanged?.Invoke("none");
+                    _consecutiveSuccesses++;
+                    _consecutiveFailures = 0;
+                    Logger.Log($"Consecutive successes: {_consecutiveSuccesses}");
+
+                    if (!_ethernetActive)
+                    {
+                        var timeOnWifiOk = (DateTime.UtcNow - _lastSwitchedToWifi) >= _minWifiUptime;
+                        if (_consecutiveSuccesses >= _successThreshold && timeOnWifiOk)
+                        {
+                            StatusChanged?.Invoke("Switching Network", "Switching from Wi-Fi to Ethernet...");
+                            await SwitchToEthernet(cancellationToken).ConfigureAwait(false);
+                            IconChanged?.Invoke("ethernet");
+                            StatusChanged?.Invoke("Active Network", "Now using Ethernet");
+                            _consecutiveSuccesses = 0;
+                            _consecutiveFailures = 0;
+                        }
+                        else
+                        {
+                            IconChanged?.Invoke("wifi");
+                            if (!timeOnWifiOk)
+                                Logger.Log($"Waiting min Wi‑Fi uptime before switching back to Ethernet (elapsed={(DateTime.UtcNow - _lastSwitchedToWifi).TotalSeconds:F1}s / required={_minWifiUptime.TotalSeconds}s)");
+                        }
+                    }
+                    else IconChanged?.Invoke("ethernet");
                 }
             }
             finally
@@ -60,6 +104,9 @@ namespace NetShift
             try
             {
                 await SwitchToEthernet(cancellationToken).ConfigureAwait(false);
+                _consecutiveFailures = 0;
+                _consecutiveSuccesses = 0;
+                _lastSwitchedToWifi = DateTime.MinValue;
             }
             finally
             {
@@ -73,6 +120,9 @@ namespace NetShift
             try
             {
                 await SwitchToWiFi(cancellationToken).ConfigureAwait(false);
+                _lastSwitchedToWifi = DateTime.UtcNow;
+                _consecutiveFailures = 0;
+                _consecutiveSuccesses = 0;
             }
             finally
             {
@@ -131,7 +181,6 @@ namespace NetShift
                 using var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
                 proc.Start();
 
-                // read output + error asynchronously
                 var stdOutTask = proc.StandardOutput.ReadToEndAsync();
                 var stdErrTask = proc.StandardError.ReadToEndAsync();
 
@@ -140,10 +189,7 @@ namespace NetShift
 
                 var completed = await Task.WhenAny(waitTask).ConfigureAwait(false);
                 if (completed != waitTask)
-                {
-                    // canceled
                     try { linked.Cancel(); } catch { }
-                }
 
                 var output = await stdOutTask.ConfigureAwait(false);
                 var error = await stdErrTask.ConfigureAwait(false);
@@ -203,7 +249,6 @@ namespace NetShift
         {
             try
             {
-                // log all adapters (useful for debugging wrong names)
                 var adapters = NetworkInterface.GetAllNetworkInterfaces();
                 foreach (var a in adapters)
                     Logger.Log($"Adapter found: Name='{a.Name}' Description='{a.Description}' Type={a.NetworkInterfaceType} Status={a.OperationalStatus}");
@@ -225,6 +270,7 @@ namespace NetShift
                 {
                     _ethernetActive = false;
                     IconChanged?.Invoke("wifi");
+                    _lastSwitchedToWifi = DateTime.UtcNow;
                 }
                 else
                 {
@@ -237,6 +283,7 @@ namespace NetShift
                     {
                         _ethernetActive = false;
                         IconChanged?.Invoke("wifi");
+                        _lastSwitchedToWifi = DateTime.UtcNow;
                     }
                     else
                     {
