@@ -3,6 +3,9 @@ using NetShift.Utils;
 
 namespace NetShift
 {
+    //build command:
+    //dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+
     static class Program
     {
         private static Config? _config = null!;
