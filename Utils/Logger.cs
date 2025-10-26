@@ -1,9 +1,4 @@
-﻿using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-
-namespace NetShift.Utils
+﻿namespace NetShift.Utils
 {
     public static class Logger
     {
