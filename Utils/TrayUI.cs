@@ -1,12 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.IO;
-using System.Threading;
-using System.Windows.Forms;
-using NetShift.Core;
-
-namespace NetShift.Utils
+﻿namespace NetShift.Utils
 {
     public class TrayUI : IDisposable
     {
@@ -17,7 +9,6 @@ namespace NetShift.Utils
         private readonly Dictionary<string, Icon> _iconCache = new(StringComparer.OrdinalIgnoreCase);
         private bool _disposed;
 
-        // keep references so we can enable/disable
         private ToolStripMenuItem? _forceEthernetItem;
         private ToolStripMenuItem? _forceWifiItem;
 
@@ -27,7 +18,6 @@ namespace NetShift.Utils
             _iconDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "res", "ico");
             _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
 
-            // Preload common icons (failsafe to SystemIcons.Warning)
             PreloadIcon("red.ico");
             PreloadIcon("green.ico");
             PreloadIcon("yellow.ico");
@@ -51,7 +41,6 @@ namespace NetShift.Utils
 
             _trayIcon.ContextMenuStrip = menu;
 
-            // Subscribe to notifications from NetworkManager
             _network.StatusChanged += OnStatusChanged;
             _network.IconChanged += OnIconChanged;
         }
@@ -70,7 +59,7 @@ namespace NetShift.Utils
             }
             catch
             {
-                // ignore load errors; fallback used later
+                //ignore load errors; fallback used later
             }
         }
 
@@ -87,7 +76,7 @@ namespace NetShift.Utils
             if (_iconCache.TryGetValue(fileName, out var icon))
                 return icon;
 
-            // try lazy load if not preloaded
+            //try lazy load if not preloaded
             try
             {
                 string path = Path.Combine(_iconDir, fileName);
@@ -105,11 +94,11 @@ namespace NetShift.Utils
 
         private void OnStatusChanged(string title, string message)
         {
-            // marshal to UI thread
+            //marshal to UI thread
             _syncContext.Post(_ =>
             {
                 try { _trayIcon.ShowBalloonTip(2000, title, message, ToolTipIcon.Info); }
-                catch { } // swallow to avoid bringing down caller threads
+                catch { } //swallow to avoid bringing down caller threads
             }, null);
         }
 
@@ -124,7 +113,7 @@ namespace NetShift.Utils
 
         private async void OnForceEthernetClicked(object? sender, EventArgs e)
         {
-            // async void is acceptable for event handlers; errors are logged
+            //async void is acceptable for event handlers; errors are logged
             try
             {
                 SetForceItemsEnabled(false);
@@ -159,7 +148,7 @@ namespace NetShift.Utils
 
         private void SetForceItemsEnabled(bool enabled)
         {
-            // ensure run on UI sync context
+            //ensure run on UI sync context
             _syncContext.Post(_ =>
             {
                 try
@@ -190,7 +179,7 @@ namespace NetShift.Utils
 
                 foreach (var kv in _iconCache)
                 {
-                    // avoid disposing SystemIcons.Warning (not in cache)
+                    //avoid disposing SystemIcons.Warning (not in cache)
                     try { kv.Value.Dispose(); } catch { }
                 }
 
