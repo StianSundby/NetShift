@@ -1,39 +1,64 @@
-﻿namespace NetShift.Utils
+﻿using NetShift.Core;
+
+namespace NetShift.Utils
 {
     public class TrayUI : IDisposable
     {
         private readonly NotifyIcon _trayIcon;
-        private readonly NetworkManager _network;
-        private readonly string _iconDir;
+        private readonly NetworkManager _networkManager;
         private readonly SynchronizationContext _syncContext;
-        private readonly Dictionary<string, Icon> _iconCache = new(StringComparer.OrdinalIgnoreCase);
         private bool _disposed;
 
-        private ToolStripMenuItem? _forceEthernetItem;
-        private ToolStripMenuItem? _forceWifiItem;
+        private readonly ToolStripMenuItem? _forceEthernetItem;
+        private readonly ToolStripMenuItem? _forceWifiItem;
+        private readonly ToolStripMenuItem? _preventSwitchItem;
+        private readonly ToolStripMenuItem? _startupItem;
+
+        private readonly IconManager _iconManager;
+        private readonly StartupManager _startupManager;
 
         public TrayUI(NetworkManager network)
         {
-            _network = network ?? throw new ArgumentNullException(nameof(network));
-            _iconDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "res", "ico");
+            _networkManager = network ?? throw new ArgumentNullException(nameof(network));
             _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
 
-            PreloadIcon("red.ico");
-            PreloadIcon("green.ico");
-            PreloadIcon("yellow.ico");
+            var icons = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "res", "ico");
+            _iconManager = new IconManager(icons);
+            _iconManager.Preload("red.ico");
+            _iconManager.Preload("green.ico");
+            _iconManager.Preload("yellow.ico");
+
+            _startupManager = new StartupManager("NetShift");
 
             _trayIcon = new NotifyIcon
             {
                 Text = "NetShift",
-                Icon = GetIconForState("none"),
+                Icon = _iconManager.GetIconForState("none"),
                 Visible = true
             };
 
             var menu = new ContextMenuStrip();
 
+            _preventSwitchItem = new ToolStripMenuItem("Prevent Auto-Switching")
+            {
+                CheckOnClick = true,
+                Checked = _networkManager.PreventAutoSwitching
+            };
+            _preventSwitchItem.Click += OnPreventSwitchClicked;
+
+            _startupItem = new ToolStripMenuItem("Start with Windows")
+            {
+                CheckOnClick = true,
+                Checked = _startupManager.IsStartupEnabled()
+            };
+            _startupItem.Click += OnStartupClicked;
+
             _forceEthernetItem = new ToolStripMenuItem("Force Ethernet", null, OnForceEthernetClicked);
             _forceWifiItem = new ToolStripMenuItem("Force Wi-Fi", null, OnForceWifiClicked);
 
+            menu.Items.Add(_preventSwitchItem);
+            menu.Items.Add(_startupItem);
+            menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(_forceEthernetItem);
             menu.Items.Add(_forceWifiItem);
             menu.Items.Add(new ToolStripSeparator());
@@ -41,64 +66,16 @@
 
             _trayIcon.ContextMenuStrip = menu;
 
-            _network.StatusChanged += OnStatusChanged;
-            _network.IconChanged += OnIconChanged;
-        }
-
-        private void PreloadIcon(string fileName)
-        {
-            try
-            {
-                string path = Path.Combine(_iconDir, fileName);
-                if (File.Exists(path))
-                {
-                    var key = fileName;
-                    if (!_iconCache.ContainsKey(key))
-                        _iconCache[key] = new Icon(path);
-                }
-            }
-            catch
-            {
-                //ignore load errors; fallback used later
-            }
-        }
-
-        private Icon GetIconForState(string state)
-        {
-            string fileName = state.ToLower() switch
-            {
-                "ethernet" => "green.ico",
-                "wifi" => "yellow.ico",
-                "none" => "red.ico",
-                _ => "red.ico"
-            };
-
-            if (_iconCache.TryGetValue(fileName, out var icon))
-                return icon;
-
-            //try lazy load if not preloaded
-            try
-            {
-                string path = Path.Combine(_iconDir, fileName);
-                if (File.Exists(path))
-                {
-                    var newIcon = new Icon(path);
-                    _iconCache[fileName] = newIcon;
-                    return newIcon;
-                }
-            }
-            catch { }
-
-            return SystemIcons.Warning;
+            _networkManager.StatusChanged += OnStatusChanged;
+            _networkManager.IconChanged += OnIconChanged;
         }
 
         private void OnStatusChanged(string title, string message)
         {
-            //marshal to UI thread
             _syncContext.Post(_ =>
             {
                 try { _trayIcon.ShowBalloonTip(2000, title, message, ToolTipIcon.Info); }
-                catch { } //swallow to avoid bringing down caller threads
+                catch { }
             }, null);
         }
 
@@ -106,18 +83,17 @@
         {
             _syncContext.Post(_ =>
             {
-                try { _trayIcon.Icon = GetIconForState(state); }
+                try { _trayIcon.Icon = _iconManager.GetIconForState(state); }
                 catch { }
             }, null);
         }
 
         private async void OnForceEthernetClicked(object? sender, EventArgs e)
         {
-            //async void is acceptable for event handlers; errors are logged
             try
             {
                 SetForceItemsEnabled(false);
-                await _network.ForceEthernet();
+                await _networkManager.ForceEthernet();
             }
             catch (Exception ex)
             {
@@ -134,7 +110,7 @@
             try
             {
                 SetForceItemsEnabled(false);
-                await _network.ForceWiFi();
+                await _networkManager.ForceWiFi();
             }
             catch (Exception ex)
             {
@@ -146,9 +122,59 @@
             }
         }
 
+        private void OnPreventSwitchClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (_preventSwitchItem == null) return;
+                _networkManager.PreventAutoSwitching = _preventSwitchItem.Checked;
+
+                var message = _preventSwitchItem.Checked ? "Automatic switching disabled." : "Automatic switching enabled.";
+                _syncContext.Post(_ =>
+                {
+                    try { _trayIcon.ShowBalloonTip(1500, "NetShift", message, ToolTipIcon.Info); }
+                    catch { }
+                }, null);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"PreventSwitchClicked error: {ex.Message}");
+            }
+        }
+
+        private void OnStartupClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (_startupItem == null) return;
+                bool startWithWindows = _startupItem.Checked;
+                if (_startupManager.SetStartupEnabled(startWithWindows))
+                {
+                    var message = startWithWindows ? "NetShift will start with Windows." : "NetShift will not start with Windows.";
+                    _syncContext.Post(_ =>
+                    {
+                        try { _trayIcon.ShowBalloonTip(1500, "NetShift", message, ToolTipIcon.Info); }
+                        catch { }
+                    }, null);
+                }
+                else
+                {
+                    _startupItem.Checked = !startWithWindows;
+                    _syncContext.Post(_ =>
+                    {
+                        try { _trayIcon.ShowBalloonTip(1500, "NetShift", "Failed to update startup setting.", ToolTipIcon.Warning); }
+                        catch { }
+                    }, null);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"OnStartupClicked error: {ex.Message}");
+            }
+        }
+
         private void SetForceItemsEnabled(bool enabled)
         {
-            //ensure run on UI sync context
             _syncContext.Post(_ =>
             {
                 try
@@ -167,8 +193,8 @@
 
             try
             {
-                _network.StatusChanged -= OnStatusChanged;
-                _network.IconChanged -= OnIconChanged;
+                _networkManager.StatusChanged -= OnStatusChanged;
+                _networkManager.IconChanged -= OnIconChanged;
 
                 if (_trayIcon != null)
                 {
@@ -177,13 +203,7 @@
                     _trayIcon.Dispose();
                 }
 
-                foreach (var kv in _iconCache)
-                {
-                    //avoid disposing SystemIcons.Warning (not in cache)
-                    try { kv.Value.Dispose(); } catch { }
-                }
-
-                _iconCache.Clear();
+                _iconManager.Dispose();
             }
             catch (Exception ex)
             {
