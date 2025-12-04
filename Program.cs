@@ -19,7 +19,7 @@ namespace NetShift
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            // Global exception handlers (UI and non-UI threads)
+            //global exception handlers (UI and non-UI threads)
             Application.ThreadException += Application_ThreadException;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
