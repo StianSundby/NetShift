@@ -8,6 +8,7 @@ NetShift is a small Windows tray utility that monitors internet connectivity and
 - Automatic network failover: switches to Wi‑Fi when Ethernet loses connectivity and back to Ethernet when connectivity is restored.
 - Tray icon with balloon notifications for status changes.
 - Manual "Force Ethernet" / "Force Wi‑Fi" actions via the tray context menu.
+- Manual "Prevent auto-switching" toggle to stop the program from changing adapter.
 - Configurable ping target and check interval.
 - Lightweight logging to log.txt for diagnostics (this will be removed in the final version).
 - Implements debounce/hysteresis to avoid rapid switching on unstable networks.
