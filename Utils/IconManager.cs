@@ -1,76 +1,41 @@
-﻿namespace NetShift.Utils
+﻿using System.Drawing;
+using System.IO;
+using NetShiftST.Core;
+
+namespace NetShiftST.Utils
 {
     internal sealed class IconManager : IDisposable
     {
-        private readonly string _iconDir;
-        private readonly Dictionary<string, Icon> _iconCache = new(StringComparer.OrdinalIgnoreCase);
-        private bool _disposed;
+        private readonly Dictionary<IconState, Icon> _icons = [];
 
         public IconManager(string iconDirectory)
         {
-            _iconDir = iconDirectory ?? throw new ArgumentNullException(nameof(iconDirectory));
+            Load(IconState.Ethernet, Path.Combine(iconDirectory, "green.ico"));
+            Load(IconState.WiFi, Path.Combine(iconDirectory, "yellow.ico"));
+            Load(IconState.Offline, Path.Combine(iconDirectory, "red.ico"));
         }
 
-        public void Preload(string fileName)
-        {
-            if (string.IsNullOrWhiteSpace(fileName)) return;
+        public Icon Get(IconState state) =>
+            _icons.TryGetValue(state, out var icon) ? icon : SystemIcons.Warning;
 
+        private void Load(IconState state, string path)
+        {
             try
             {
-                string path = Path.Combine(_iconDir, fileName);
                 if (File.Exists(path))
-                {
-                    if (!_iconCache.ContainsKey(fileName))
-                        _iconCache[fileName] = new Icon(path);
-                }
+                    _icons[state] = new Icon(path);
             }
-            catch
+            catch (Exception ex)
             {
-                //ignore load errors. Fallback used later
+                Logger.Log($"Could not load icon '{path}': {ex.Message}");
             }
-        }
-
-        public Icon GetIconForState(string state)
-        {
-            state ??= string.Empty;
-
-            string fileName = state.ToLower() switch
-            {
-                "ethernet" => "green.ico",
-                "wifi" => "yellow.ico",
-                "none" => "red.ico",
-                _ => "red.ico"
-            };
-
-            if (_iconCache.TryGetValue(fileName, out var icon))
-                return icon;
-
-            //try lazy load if not preloaded
-            try
-            {
-                string path = Path.Combine(_iconDir, fileName);
-                if (File.Exists(path))
-                {
-                    var newIcon = new Icon(path);
-                    _iconCache[fileName] = newIcon;
-                    return newIcon;
-                }
-            }
-            catch { }
-
-            return SystemIcons.Warning;
         }
 
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
-
-            foreach (var kv in _iconCache)
-            {
-                try { kv.Value.Dispose(); } catch { }
-            }
-            _iconCache.Clear();
+            foreach (var icon in _icons.Values)
+                icon.Dispose();
+            _icons.Clear();
         }
     }
 }

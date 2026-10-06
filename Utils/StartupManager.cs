@@ -1,87 +1,104 @@
 ﻿using System.Diagnostics;
 using Microsoft.Win32;
 
-namespace NetShift.Utils
+namespace NetShiftST.Utils
 {
-    internal sealed class StartupManager
+    public sealed class StartupManager
     {
         private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
         private readonly string _appName;
+        public event Action<bool>? StartupChanged;
 
         public StartupManager(string appName)
         {
             _appName = string.IsNullOrWhiteSpace(appName) ? throw new ArgumentNullException(nameof(appName)) : appName;
         }
-
+        
         public bool IsStartupEnabled()
         {
             try
             {
-                if (IsScheduledTaskPresent()) return true;
+                if (IsScheduledTaskPresent()) 
+                    return true;
             }
             catch (Exception ex)
             {
                 Logger.Log($"IsScheduledTaskPresent error: {ex.Message}");
             }
 
-            //fallback to registry check
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: false);
-                if (key == null) return false;
-                var val = key.GetValue(_appName) as string;
-                if (string.IsNullOrWhiteSpace(val)) return false;
 
-                var exe = Application.ExecutablePath;
-                return string.Equals(val.Trim('"'), exe, StringComparison.OrdinalIgnoreCase) ||
-                       string.Equals(val, $"\"{exe}\"", StringComparison.OrdinalIgnoreCase);
+                if (key == null) 
+                    return false;
+
+                var val = key.GetValue(_appName) as string;
+                if (string.IsNullOrWhiteSpace(val)) 
+                    return false;
+
+                var exe = Environment.ProcessPath!;
+                return string.Equals(val.Trim('"'), exe, StringComparison.OrdinalIgnoreCase);
             }
-            catch
-            {
-                return false;
+            catch 
+            { 
+                return false; 
             }
         }
 
         public bool SetStartupEnabled(bool enabled)
         {
+            bool success;
+
             try
             {
                 if (enabled)
                 {
-                    if (CreateScheduledTask()) return true;
-                    Logger.Log("Scheduled task creation failed; falling back to registry startup.");
-                    return SetRegistryStartup(true);
+                    success = CreateScheduledTask();
+                    if (!success)
+                    {
+                        Logger.Log("Scheduled task creation failed; " + "falling back to registry startup.");
+                        success = SetRegistryStartup(true);
+                    }
                 }
                 else
                 {
-                    if (DeleteScheduledTask()) return true;
-                    Logger.Log("Scheduled task deletion failed or not found; falling back to registry removal.");
-                    return SetRegistryStartup(false);
+                    success = DeleteScheduledTask();
+                    if (!success)
+                    {
+                        Logger.Log("Scheduled task deletion failed; " + "falling back to registry removal.");
+                        success = SetRegistryStartup(false);
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Logger.Log($"SetStartupEnabled (task) error: {ex.Message}");
-                return SetRegistryStartup(enabled);
+                success = SetRegistryStartup(enabled);
             }
+
+            if (success)
+                StartupChanged?.Invoke(enabled);
+
+            return success;
         }
 
         private bool SetRegistryStartup(bool enabled)
         {
             try
             {
-                using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true) ?? Registry.CurrentUser.CreateSubKey(RunKey);
-                if (key == null) return false;
+                using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true) 
+                    ?? Registry.CurrentUser.CreateSubKey(RunKey);
+
+                if (key == null) 
+                    return false;
 
                 if (enabled)
                 {
-                    var exe = Application.ExecutablePath;
+                    var exe = Environment.ProcessPath!;
                     key.SetValue(_appName, $"\"{exe}\"", RegistryValueKind.String);
                 }
-                else
-                {
-                    key.DeleteValue(_appName, throwOnMissingValue: false);
-                }
+                else key.DeleteValue(_appName, throwOnMissingValue: false);
 
                 return true;
             }
@@ -94,15 +111,16 @@ namespace NetShift.Utils
 
         private bool IsScheduledTaskPresent()
         {
-            var result = RunSchtasks($"/Query /TN \"{_appName}\"");
+            var result = RunScheduledTasks($"/Query /TN \"{_appName}\"");
             return result.success;
         }
-
+        
         private bool CreateScheduledTask()
         {
-            var exe = Application.ExecutablePath;
+            var exe = Environment.ProcessPath!;
+            //https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-create
             var args = $"/Create /TN \"{_appName}\" /TR \"\\\"{exe}\\\"\" /SC ONLOGON /RL HIGHEST /F";
-            var result = RunSchtasks(args);
+            var result = RunScheduledTasks(args);
 
             if (result.success)
             {
@@ -117,15 +135,15 @@ namespace NetShift.Utils
         private bool DeleteScheduledTask()
         {
             var args = $"/Delete /TN \"{_appName}\" /F";
-            var result = RunSchtasks(args);
+            var result = RunScheduledTasks(args);
+
             if (result.success)
             {
                 Logger.Log("Scheduled task deleted.");
                 return true;
             }
 
-            if (result.output != null &&
-                result.output.Contains("ERROR: The system cannot find the file specified", StringComparison.OrdinalIgnoreCase))
+            if (result.output != null && result.output.Contains("ERROR: The system cannot find the file specified", StringComparison.OrdinalIgnoreCase))
             {
                 Logger.Log("Scheduled task not found.");
                 return true;
@@ -135,11 +153,11 @@ namespace NetShift.Utils
             return false;
         }
 
-        private static (bool success, string? output) RunSchtasks(string args, int timeoutMs = 10000)
+        private static (bool success, string? output) RunScheduledTasks(string args, int timeoutMs = 10000)
         {
             try
             {
-                var psi = new ProcessStartInfo
+                var startInfo = new ProcessStartInfo
                 {
                     FileName = "schtasks",
                     Arguments = args,
@@ -149,20 +167,24 @@ namespace NetShift.Utils
                     RedirectStandardError = true
                 };
 
-                using var proc = new Process { StartInfo = psi };
-                proc.Start();
+                using var process = new Process { StartInfo = startInfo };
+                process.Start();
 
-                var stdOut = proc.StandardOutput.ReadToEnd();
-                var stdErr = proc.StandardError.ReadToEnd();
+                var stdOut = process.StandardOutput.ReadToEnd();
+                var stdErr = process.StandardError.ReadToEnd();
 
-                if (!proc.WaitForExit(timeoutMs))
+                if (!process.WaitForExit(timeoutMs))
                 {
-                    try { proc.Kill(); } catch { }
+                    try
+                    {
+                        process.Kill();
+                    }
+                    catch { }
                     return (false, "schtasks timed out");
                 }
 
                 var combined = (stdOut + "\n" + stdErr).Trim();
-                return (proc.ExitCode == 0, combined);
+                return (process.ExitCode == 0, combined);
             }
             catch (Exception ex)
             {
