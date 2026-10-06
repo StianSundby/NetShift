@@ -1,5 +1,9 @@
-﻿namespace NetShift.Core
+﻿using NetShiftST.Utils;
+using System.IO;
+
+namespace NetShiftST.Core
 {
+    public enum CloseAction { Ask, MinimizeToTray, Exit}
     public class Config
     {
         public string EthernetName { get; set; } = "Ethernet";
@@ -9,6 +13,7 @@
         public int FailureThreshold { get; set; } = 3;
         public int SuccessThreshold { get; set; } = 2;
         public int MinWifiUptimeSeconds { get; set; } = 10;
+        public CloseAction CloseAction { get; set; } = CloseAction.Ask;
 
         public static Config Load(string path)
         {
@@ -16,44 +21,52 @@
 
             if (!File.Exists(path))
             {
-                Console.WriteLine($".cfg file '{path}' not found - using default values.");
+                Logger.Log($"Config file '{path}' not found - using defaults.");
                 return cfg;
             }
 
             foreach (var line in File.ReadAllLines(path))
             {
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
                     continue;
 
-                var parts = line.Split("=", 2, StringSplitOptions.TrimEntries);
+                var parts = line.Split('=', 2, StringSplitOptions.TrimEntries);
                 if (parts.Length != 2)
                     continue;
 
-                switch (parts[0].ToLower())
+                var value = parts[1];
+                switch (parts[0].ToLowerInvariant())
                 {
-                    case "ethernetname": cfg.EthernetName = parts[1]; break;
-                    case "wifiname": cfg.WiFiName = parts[1]; break;
-                    case "pingtarget": cfg.PingTarget = parts[1]; break;
-                    case "checkintervalseconds":
-                        if (int.TryParse(parts[1], out int ci))
-                            cfg.CheckIntervalSeconds = ci;
-                        break;
-                    case "failurethreshold":
-                        if (int.TryParse(parts[1], out int ft))
-                            cfg.FailureThreshold = ft;
-                        break;
-                    case "successthreshold":
-                        if (int.TryParse(parts[1], out int st))
-                            cfg.SuccessThreshold = st;
-                        break;
-                    case "minwifiuptimeseconds":
-                        if (int.TryParse(parts[1], out int ms))
-                            cfg.MinWifiUptimeSeconds = ms;
-                        break;
+                    case "ethernetname": cfg.EthernetName = value; break;
+                    case "wifiname": cfg.WiFiName = value; break;
+                    case "pingtarget": cfg.PingTarget = value; break;
+                    case "checkintervalseconds": cfg.CheckIntervalSeconds = ParseInt(value, cfg.CheckIntervalSeconds); break;
+                    case "failurethreshold": cfg.FailureThreshold = ParseInt(value, cfg.FailureThreshold); break;
+                    case "successthreshold": cfg.SuccessThreshold = ParseInt(value, cfg.SuccessThreshold); break;
+                    case "minwifiuptimeseconds": cfg.MinWifiUptimeSeconds = ParseInt(value, cfg.MinWifiUptimeSeconds); break;
+                    case "closeaction": if (Enum.TryParse<CloseAction>(value, ignoreCase: true, out var closeAction)) { cfg.CloseAction = closeAction; } break;
                 }
             }
 
             return cfg;
         }
+
+        public void Save(string path)
+        {
+            File.WriteAllLines(path,
+            [
+                $"ethernetname={EthernetName}",
+                $"wifiname={WiFiName}",
+                $"pingtarget={PingTarget}",
+                $"checkintervalseconds={CheckIntervalSeconds}",
+                $"failurethreshold={FailureThreshold}",
+                $"successthreshold={SuccessThreshold}",
+                $"minwifiuptimeseconds={MinWifiUptimeSeconds}",
+                $"closeaction={CloseAction}"
+            ]);
+        }
+
+        private static int ParseInt(string text, int fallback) => 
+            int.TryParse(text, out var n) ? n : fallback;
     }
 }
