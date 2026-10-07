@@ -14,6 +14,8 @@ namespace NetShiftST.Core
         public int SuccessThreshold { get; set; } = 2;
         public int MinWifiUptimeSeconds { get; set; } = 10;
         public CloseAction CloseAction { get; set; } = CloseAction.Ask;
+        public bool InternetCutoffEnabled { get; set; } = false;
+        public TimeOnly InternetCutoffTime { get; set; } = new(22, 17);
 
         public static Config Load(string path)
         {
@@ -45,6 +47,8 @@ namespace NetShiftST.Core
                     case "successthreshold": cfg.SuccessThreshold = ParseInt(value, cfg.SuccessThreshold); break;
                     case "minwifiuptimeseconds": cfg.MinWifiUptimeSeconds = ParseInt(value, cfg.MinWifiUptimeSeconds); break;
                     case "closeaction": if (Enum.TryParse<CloseAction>(value, ignoreCase: true, out var closeAction)) { cfg.CloseAction = closeAction; } break;
+                    case "internetcutoffenabled": if (bool.TryParse(value, out var cutoffEnabled)) cfg.InternetCutoffEnabled = cutoffEnabled; break;
+                    case "internetcutofftime": if (TimeOnly.TryParse(value, out var cutoffTime)) cfg.InternetCutoffTime = cutoffTime; break;
                 }
             }
 
@@ -62,7 +66,9 @@ namespace NetShiftST.Core
                 $"failurethreshold={FailureThreshold}",
                 $"successthreshold={SuccessThreshold}",
                 $"minwifiuptimeseconds={MinWifiUptimeSeconds}",
-                $"closeaction={CloseAction}"
+                $"closeaction={CloseAction}",
+                $"internetcutoffenabled={InternetCutoffEnabled}",
+                $"internetcutofftime={InternetCutoffTime:HH:mm}"
             ]);
         }
 
