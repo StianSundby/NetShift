@@ -1,9 +1,12 @@
-﻿using System.Drawing;
+using System.Drawing;
 using System.IO;
 using NetShiftST.Core;
 
 namespace NetShiftST.Utils
 {
+    /// <summary>
+    /// Loads and owns network status icons, with a system icon fallback.
+    /// </summary>
     internal sealed class IconManager : IDisposable
     {
         private readonly Dictionary<IconState, Icon> _icons = [];

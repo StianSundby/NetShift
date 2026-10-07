@@ -1,8 +1,11 @@
-﻿using NetShiftST.Core;
 using System.IO;
+using NetShiftST.Core;
 
 namespace NetShiftST.Utils;
 
+/// <summary>
+/// Owns the notification icon and tray actions for network and startup control.
+/// </summary>
 public class TrayUI : IDisposable
 {
     private readonly NetworkManager _network;
@@ -47,21 +50,32 @@ public class TrayUI : IDisposable
             Checked = _startup.IsStartupEnabled()
         };
 
-        _startupItem.Click += (_, _) => 
+        _startupItem.Click += (_, _) =>
             OnStartupClicked(_startupItem);
 
-        _forceEthernetItem = new ToolStripMenuItem("Force Ethernet", null, async (_, _) => 
+        _forceEthernetItem = new ToolStripMenuItem("Force Ethernet", null, async (_, _) =>
             await ForceAsync(ethernet: true));
 
-        _forceWifiItem = new ToolStripMenuItem("Force Wi-Fi", null, async (_, _) => 
+        _forceWifiItem = new ToolStripMenuItem("Force Wi-Fi", null, async (_, _) =>
             await ForceAsync(ethernet: false));
 
-        var exitItem = new ToolStripMenuItem("Exit", null, (_, _) => 
+        var exitItem = new ToolStripMenuItem("Exit", null, (_, _) =>
             ExitApplication());
 
-        var openItem = new ToolStripMenuItem("Open NetShift", null, (_, _) => 
+        var openItem = new ToolStripMenuItem("Open NetShift", null, (_, _) =>
             ShowMainWindow());
 
+        BuildContextMenu(openItem, exitItem);
+
+        _trayIcon.DoubleClick += (_, _) => ShowMainWindow();
+        _network.StatusChanged += OnStatusChanged;
+        _network.IconChanged += OnIconChanged;
+        _network.PreventAutoSwitchingChanged += OnPreventAutoSwitchingChanged;
+        _startup.StartupChanged += OnStartupChanged;
+    }
+
+    private void BuildContextMenu(ToolStripMenuItem openItem, ToolStripMenuItem exitItem)
+    {
         var menu = new ContextMenuStrip();
         menu.Items.Add(openItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -73,47 +87,9 @@ public class TrayUI : IDisposable
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exitItem);
         _trayIcon.ContextMenuStrip = menu;
-
-        _trayIcon.DoubleClick += (_, _) => ShowMainWindow();
-        _network.StatusChanged += OnStatusChanged;
-        _network.IconChanged += OnIconChanged;
-        _network.PreventAutoSwitchingChanged += OnPreventAutoSwitchingChanged;
-        _startup.StartupChanged += OnStartupChanged;
     }
 
-    private void OnPreventAutoSwitchingChanged(bool enabled)
-    {
-        if (_trayIcon.ContextMenuStrip?.InvokeRequired == true)
-        {
-            _trayIcon.ContextMenuStrip.Invoke(() => 
-            { 
-                _preventItem.Checked = enabled; 
-            });
-            return;
-        }
-
-        _preventItem.Checked = enabled;
-    }
-
-    private void OnStatusChanged(string title, string message) => 
-        ShowBalloon(title, message);
-
-    private void OnIconChanged(IconState state) => 
-        _trayIcon.Icon = _icons.Get(state);
-
-    private void OnStartupChanged(bool enabled)
-    {
-        if (_trayIcon.ContextMenuStrip?.InvokeRequired == true)
-        {
-            _trayIcon.ContextMenuStrip.Invoke(new Action(() => 
-            { 
-                _startupItem.Checked = enabled; 
-            }));
-            return;
-        }
-
-        _startupItem.Checked = enabled;
-    }
+    #region User actions
 
     private async Task ForceAsync(bool ethernet)
     {
@@ -167,14 +143,56 @@ public class TrayUI : IDisposable
 
     private void ExitApplication()
     {
-        System.Windows.Application.Current.Dispatcher.Invoke(() => 
-        { 
-            _mainWindow.ExitApplication(); 
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            _mainWindow.ExitApplication();
         });
+    }
+
+    #endregion
+
+    #region Event handlers
+
+    private void OnPreventAutoSwitchingChanged(bool enabled)
+    {
+        if (_trayIcon.ContextMenuStrip?.InvokeRequired == true)
+        {
+            _trayIcon.ContextMenuStrip.Invoke(() =>
+            {
+                _preventItem.Checked = enabled;
+            });
+            return;
+        }
+
+        _preventItem.Checked = enabled;
+    }
+
+    private void OnStatusChanged(string title, string message) =>
+        ShowBalloon(title, message);
+
+    private void OnIconChanged(IconState state) =>
+        _trayIcon.Icon = _icons.Get(state);
+
+    private void OnStartupChanged(bool enabled)
+    {
+        if (_trayIcon.ContextMenuStrip?.InvokeRequired == true)
+        {
+            _trayIcon.ContextMenuStrip.Invoke(new Action(() =>
+            {
+                _startupItem.Checked = enabled;
+            }));
+            return;
+        }
+
+        _startupItem.Checked = enabled;
     }
 
     private void ShowBalloon(string title, string message, ToolTipIcon icon = ToolTipIcon.Info) =>
         _trayIcon.ShowBalloonTip(2000, title, message, icon);
+
+    #endregion
+
+    #region Disposal
 
     public void Dispose()
     {
@@ -190,4 +208,7 @@ public class TrayUI : IDisposable
 
         GC.SuppressFinalize(this);
     }
+
+    #endregion
+
 }

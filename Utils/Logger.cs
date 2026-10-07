@@ -1,7 +1,10 @@
-﻿using System.IO;
+using System.IO;
 
 namespace NetShiftST.Utils
 {
+    /// <summary>
+    /// Appends timestamped diagnostic messages to the application log.
+    /// </summary>
     public static class Logger
     {
         private static readonly string LogFile = Path.Combine(AppContext.BaseDirectory, "log.txt");

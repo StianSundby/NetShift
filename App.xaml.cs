@@ -1,12 +1,12 @@
-﻿using NetShiftST.Utils;
-using NetShiftST.Core;
-using System.Windows;
 using System.IO;
+using System.Windows;
+using NetShiftST.Core;
+using NetShiftST.Utils;
 
 namespace NetShiftST
 {
     /// <summary>
-    /// Interaction logic for App.xaml
+    /// Creates application services and owns network monitoring and tray cleanup.
     /// </summary>
     public partial class App : System.Windows.Application
     {
@@ -38,6 +38,12 @@ namespace NetShiftST
             _ = MonitorAsync(_network, _config);
         }
 
+        protected override void OnExit(ExitEventArgs e)
+        {
+            _tray?.Dispose();
+            base.OnExit(e);
+        }
+
         private static async Task MonitorAsync(NetworkManager network, Config config)
         {
             await network.InitializeAsync();
@@ -58,11 +64,6 @@ namespace NetShiftST
             }
         }
 
-        protected override void OnExit(ExitEventArgs e)
-        {
-            _tray?.Dispose();
-            base.OnExit(e);
-        }
     }
 
 }

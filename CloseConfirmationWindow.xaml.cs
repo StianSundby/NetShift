@@ -1,8 +1,11 @@
-﻿using NetShiftST.Core;
 using System.Windows;
+using NetShiftST.Core;
 
 namespace NetShiftST
 {
+    /// <summary>
+    /// Collects the preferred close action and whether the choice should be remembered.
+    /// </summary>
     public partial class CloseConfirmationWindow : Window
     {
         public CloseAction SelectedAction { get; private set; } = CloseAction.Ask;

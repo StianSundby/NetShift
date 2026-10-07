@@ -1,38 +1,43 @@
-﻿using LiveChartsCore;
-using LiveChartsCore.Defaults;
-using LiveChartsCore.SkiaSharpView;
-using NetShiftST.Core;
-using NetShiftST.Utils;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Net.NetworkInformation;
-using System.Windows;
 using System.Windows.Threading;
+using System.Windows;
+using LiveChartsCore.Defaults;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore;
+using NetShiftST.Core;
+using NetShiftST.Utils;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
 
-
 namespace NetShiftST
 {
+    /// <summary>
+    /// Displays network controls, settings, live charts, and window modes.
+    /// </summary>
     public partial class MainWindow : Window
     {
+        private readonly Config _config;
+        private readonly NetworkManager _network;
+        private readonly StartupManager _startup;
+        private readonly string _configPath = Path.Combine(AppContext.BaseDirectory, "settings.cfg");
+
+        private readonly DispatcherTimer _networkTimer;
+        private readonly DispatcherTimer _feedbackTimer;
+
         private readonly ObservableCollection<ObservableValue> _downloadValues = [];
         private readonly ObservableCollection<ObservableValue> _uploadValues = [];
         private readonly ObservableCollection<ObservableValue> _pingValues = [];
         private NetworkInterface? _currentAdapter;
         private long _previousBytesReceived;
         private long _previousBytesSent;
-        private readonly DispatcherTimer _networkTimer;
-        private readonly StartupManager _startup;
-        private bool _isLoadingUI = true;
-        private bool _allowClose;
         private IconState _currentNetworkState = IconState.Offline;
         private double? _currentPing;
+
+        private bool _isLoadingUI = true;
+        private bool _allowClose;
         private bool _monitorMode;
-        private readonly Config _config;
-        private readonly NetworkManager _network;
-        private readonly DispatcherTimer _feedbackTimer;
-        private readonly string _configPath = Path.Combine(AppContext.BaseDirectory, "settings.cfg");
 
         public MainWindow(Config config, NetworkManager network, StartupManager startup)
         {
@@ -42,9 +47,9 @@ namespace NetShiftST
 
             InitializeComponent();
 
-            _feedbackTimer = new DispatcherTimer{ Interval = TimeSpan.FromSeconds(4) };
+            _feedbackTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
 
-            _feedbackTimer.Tick += (_, _) => 
+            _feedbackTimer.Tick += (_, _) =>
             {
                 _feedbackTimer.Stop();
                 FeedbackText.Text = "";
@@ -67,6 +72,8 @@ namespace NetShiftST
             _networkTimer.Start();
         }
 
+        #region Initialization
+
         private void LoadConfigIntoUI()
         {
             _isLoadingUI = true;
@@ -88,40 +95,6 @@ namespace NetShiftST
             {
                 _isLoadingUI = false;
             }
-        }
-
-        private void SaveButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (!int.TryParse(CheckIntervalTextBox.Text, out var checkInterval) ||
-                !int.TryParse(FailureThresholdTextBox.Text, out var failureThreshold) ||
-                !int.TryParse(SuccessThresholdTextBox.Text, out var successThreshold) ||
-                !int.TryParse(MinimumWiFiUptimeTextBox.Text, out var minWifiUptime) ||
-                checkInterval < 1 ||
-                failureThreshold < 1 ||
-                successThreshold < 1 ||
-                minWifiUptime < 0)
-            {
-                MessageBox.Show(
-                    "Check that all numeric settings contain valid values.",
-                    "Invalid settings",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-
-                return;
-            }
-
-            _config.WiFiName = WiFiNameTextBox.Text.Trim();
-            _config.EthernetName = EthernetNameTextBox.Text.Trim();
-            _config.PingTarget = PingTargetTextBox.Text.Trim();
-
-            _config.CheckIntervalSeconds = checkInterval;
-            _config.FailureThreshold = failureThreshold;
-            _config.SuccessThreshold = successThreshold;
-            _config.MinWifiUptimeSeconds = minWifiUptime;
-
-            _config.Save(_configPath);
-            UpdateSaveButtonVisibility();
-            ShowFeedback("Settings saved");
         }
 
         private void SetUpCharts()
@@ -193,15 +166,140 @@ namespace NetShiftST
             ];
         }
 
-        private void ShowFeedback(string message)
+        #endregion
+
+        #region Settings
+
+        private void SaveButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!int.TryParse(CheckIntervalTextBox.Text, out var checkInterval) ||
+                !int.TryParse(FailureThresholdTextBox.Text, out var failureThreshold) ||
+                !int.TryParse(SuccessThresholdTextBox.Text, out var successThreshold) ||
+                !int.TryParse(MinimumWiFiUptimeTextBox.Text, out var minWifiUptime) ||
+                checkInterval < 1 ||
+                failureThreshold < 1 ||
+                successThreshold < 1 ||
+                minWifiUptime < 0)
+            {
+                MessageBox.Show(
+                    "Check that all numeric settings contain valid values.",
+                    "Invalid settings",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return;
+            }
+
+            _config.WiFiName = WiFiNameTextBox.Text.Trim();
+            _config.EthernetName = EthernetNameTextBox.Text.Trim();
+            _config.PingTarget = PingTargetTextBox.Text.Trim();
+
+            _config.CheckIntervalSeconds = checkInterval;
+            _config.FailureThreshold = failureThreshold;
+            _config.SuccessThreshold = successThreshold;
+            _config.MinWifiUptimeSeconds = minWifiUptime;
+
+            _config.Save(_configPath);
+            UpdateSaveButtonVisibility();
+            ShowFeedback("Settings saved");
+        }
+
+        private void Setting_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoadingUI)
+                return;
+
+            UpdateSaveButtonVisibility();
+        }
+
+        private void UpdateSaveButtonVisibility()
+        {
+            bool hasChanges =
+                WiFiNameTextBox.Text != _config.WiFiName ||
+                EthernetNameTextBox.Text != _config.EthernetName ||
+                PingTargetTextBox.Text != _config.PingTarget ||
+                CheckIntervalTextBox.Text != _config.CheckIntervalSeconds.ToString() ||
+                FailureThresholdTextBox.Text != _config.FailureThreshold.ToString() ||
+                SuccessThresholdTextBox.Text != _config.SuccessThreshold.ToString() ||
+                MinimumWiFiUptimeTextBox.Text != _config.MinWifiUptimeSeconds.ToString();
+
+            SaveButton.Visibility = hasChanges ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void PreventAutoSwitching_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoadingUI)
+                return;
+
+            _network.PreventAutoSwitching = PreventAutoSwitchingCheckBox.IsChecked == true;
+            ShowFeedback(_network.PreventAutoSwitching ? "Automatic switching disabled" : "Automatic switching enabled");
+        }
+
+        private void StartWithWindows_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoadingUI)
+                return;
+
+            bool enabled = StartWithWindowsCheckBox.IsChecked == true;
+
+            if (!_startup.SetStartupEnabled(enabled))
+            {
+                _isLoadingUI = true;
+                StartWithWindowsCheckBox.IsChecked = !enabled;
+                _isLoadingUI = false;
+
+                MessageBox.Show(
+                    "Failed to update the Windows startup setting.",
+                    "NetShift",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+            else
+                ShowFeedback(enabled ? "Start with Windows enabled" : "Start with Windows disabled");
+        }
+
+        private void OnPreventAutoSwitchingChanged(bool enabled)
         {
             Dispatcher.Invoke(() =>
             {
-                FeedbackText.Text = message;
+                _isLoadingUI = true;
 
-                _feedbackTimer.Stop();
-                _feedbackTimer.Start();
+                try
+                {
+                    PreventAutoSwitchingCheckBox.IsChecked = enabled;
+                }
+                finally
+                {
+                    _isLoadingUI = false;
+                }
             });
+        }
+
+        private void OnStartupChanged(bool enabled)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                _isLoadingUI = true;
+
+                try
+                {
+                    StartWithWindowsCheckBox.IsChecked = enabled;
+                }
+                finally
+                {
+                    _isLoadingUI = false;
+                }
+            });
+        }
+
+        #endregion
+
+        #region Monitoring and feedback
+
+        private async void NetworkTimer_Tick(object? sender, EventArgs e)
+        {
+            UpdateThroughput();
+            await UpdatePingAsync();
         }
 
         private NetworkInterface? FindActiveAdapter()
@@ -257,13 +355,7 @@ namespace NetShiftST
                 collection.RemoveAt(0);
         }
 
-        private async void NetworkTimer_Tick(object? sender, EventArgs e)
-        {
-            UpdateThroughput();
-            await UpdatePing();
-        }
-
-        private async Task UpdatePing()
+        private async Task UpdatePingAsync()
         {
             string target = _config.PingTarget;
 
@@ -305,65 +397,6 @@ namespace NetShiftST
             MonitorStatusText.Text = $"{network}  •  {ping}";
         }
 
-        private async void ForceEthernetButton_Click(object sender,RoutedEventArgs e)
-        {
-            await _network.ForceEthernetAsync();
-        }
-
-        private async void ForceWiFiButton_Click(object sender, RoutedEventArgs e)
-        {
-            await _network.ForceWiFiAsync();
-        }
-
-        private void PreventAutoSwitching_Changed(object sender, RoutedEventArgs e)
-        {
-            if (_isLoadingUI)
-                return;
-
-            _network.PreventAutoSwitching = PreventAutoSwitchingCheckBox.IsChecked == true;
-            ShowFeedback(_network.PreventAutoSwitching ? "Automatic switching disabled" : "Automatic switching enabled");
-        }
-
-        private void StartWithWindows_Changed(object sender, RoutedEventArgs e)
-        {
-            if (_isLoadingUI)
-                return;
-
-            bool enabled = StartWithWindowsCheckBox.IsChecked == true;
-
-            if (!_startup.SetStartupEnabled(enabled))
-            {
-                _isLoadingUI = true;
-                StartWithWindowsCheckBox.IsChecked = !enabled;
-                _isLoadingUI = false;
-
-                MessageBox.Show(
-                    "Failed to update the Windows startup setting.",
-                    "NetShift",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-            }
-            else
-                ShowFeedback(enabled ? "Start with Windows enabled" : "Start with Windows disabled");
-        }
-
-        private void OnPreventAutoSwitchingChanged(bool enabled)
-        {
-            Dispatcher.Invoke(() =>
-            {
-                _isLoadingUI = true;
-
-                try
-                {
-                    PreventAutoSwitchingCheckBox.IsChecked = enabled;
-                }
-                finally
-                {
-                    _isLoadingUI = false;
-                }
-            });
-        }
-
         private void OnNetworkStateChanged(IconState state)
         {
             Dispatcher.Invoke(() =>
@@ -397,27 +430,34 @@ namespace NetShiftST
             ShowFeedback(message);
         }
 
-        private void Setting_Changed(object sender, RoutedEventArgs e)
+        private void ShowFeedback(string message)
         {
-            if (_isLoadingUI)
-                return;
+            Dispatcher.Invoke(() =>
+            {
+                FeedbackText.Text = message;
 
-            UpdateSaveButtonVisibility();
+                _feedbackTimer.Stop();
+                _feedbackTimer.Start();
+            });
         }
 
-        private void UpdateSaveButtonVisibility()
-        {
-            bool hasChanges =
-                WiFiNameTextBox.Text != _config.WiFiName ||
-                EthernetNameTextBox.Text != _config.EthernetName ||
-                PingTargetTextBox.Text != _config.PingTarget ||
-                CheckIntervalTextBox.Text != _config.CheckIntervalSeconds.ToString() ||
-                FailureThresholdTextBox.Text != _config.FailureThreshold.ToString() ||
-                SuccessThresholdTextBox.Text != _config.SuccessThreshold.ToString() ||
-                MinimumWiFiUptimeTextBox.Text != _config.MinWifiUptimeSeconds.ToString();
+        #endregion
 
-            SaveButton.Visibility = hasChanges ? Visibility.Visible : Visibility.Collapsed;
+        #region Network actions
+
+        private async void ForceEthernetButton_Click(object sender, RoutedEventArgs e)
+        {
+            await _network.ForceEthernetAsync();
         }
+
+        private async void ForceWiFiButton_Click(object sender, RoutedEventArgs e)
+        {
+            await _network.ForceWiFiAsync();
+        }
+
+        #endregion
+
+        #region Window controls
 
         private void MinimizeButton_Click(object sender, RoutedEventArgs e)
         {
@@ -507,6 +547,15 @@ namespace NetShiftST
             e.Handled = true;
         }
 
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            Close();
+        }
+
+        #endregion
+
+        #region Lifecycle
+
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
             if (_allowClose)
@@ -532,23 +581,6 @@ namespace NetShiftST
                     ShowCloseConfirmation();
                     return;
             }
-        }
-
-        private void OnStartupChanged(bool enabled)
-        {
-            Dispatcher.Invoke(() =>
-            {
-                _isLoadingUI = true;
-
-                try
-                {
-                    StartWithWindowsCheckBox.IsChecked = enabled;
-                }
-                finally
-                {
-                    _isLoadingUI = false;
-                }
-            });
         }
 
         private void ShowCloseConfirmation()
@@ -581,11 +613,6 @@ namespace NetShiftST
             }
         }
 
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
-        {
-            Close();
-        }
-
         protected override void OnClosed(EventArgs e)
         {
             _network.IconChanged -= OnNetworkStateChanged;
@@ -604,5 +631,8 @@ namespace NetShiftST
             _allowClose = true;
             Application.Current.Shutdown();
         }
+
+        #endregion
+
     }
 }

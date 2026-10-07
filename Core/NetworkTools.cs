@@ -1,13 +1,38 @@
-﻿using NetShiftST.Utils;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
+using NetShiftST.Utils;
 
 namespace NetShiftST.Core
 {
+    /// <summary>
+    /// Provides adapter lookup, connectivity probes, adapter commands, and diagnostics.
+    /// </summary>
     internal static class NetworkTools
     {
         private const int PingTimeoutMs = 2000;
         private const int AdapterUpTimeoutMs = 10000;
+
+        /// <summary>
+        /// Finds an adapter by exact name, then partial name or description. Partial matches select the first matching adapter.
+        /// </summary>
+        public static NetworkInterface? FindAdapter(string configuredName)
+        {
+            if (string.IsNullOrWhiteSpace(configuredName))
+                return null;
+
+            var adapters = NetworkInterface.GetAllNetworkInterfaces();
+            const StringComparison ignoreCase = StringComparison.OrdinalIgnoreCase;
+
+            return adapters.FirstOrDefault(a => a.Name.Equals(configuredName, ignoreCase))
+                ?? adapters.FirstOrDefault(a => a.Name.Contains(configuredName, ignoreCase))
+                ?? adapters.FirstOrDefault(a => a.Description.Contains(configuredName, ignoreCase));
+        }
+
+        /// <summary>
+        /// Checks operational adapter status; this does not verify internet connectivity.
+        /// </summary>
+        public static bool IsUp(string configuredName) =>
+                    FindAdapter(configuredName)?.OperationalStatus == OperationalStatus.Up;
 
         public static async Task<bool> PingAsync(string target)
         {
@@ -24,28 +49,9 @@ namespace NetShiftST.Core
             }
         }
 
-        public static NetworkInterface? FindAdapter(string configuredName)
-        {
-            if (string.IsNullOrWhiteSpace(configuredName))
-                return null;
-
-            var adapters = NetworkInterface.GetAllNetworkInterfaces();
-            const StringComparison ignoreCase = StringComparison.OrdinalIgnoreCase;
-
-            return adapters.FirstOrDefault(a => a.Name.Equals(configuredName, ignoreCase))
-                ?? adapters.FirstOrDefault(a => a.Name.Contains(configuredName, ignoreCase))
-                ?? adapters.FirstOrDefault(a => a.Description.Contains(configuredName, ignoreCase));
-        }
-
-        public static bool IsUp(string configuredName) =>
-            FindAdapter(configuredName)?.OperationalStatus == OperationalStatus.Up;
-
-        public static Task EnableAdapterAsync(string name) =>
-            RunNetshAsync($"interface set interface \"{name}\" admin=enabled");
-
-        public static Task DisableAdapterAsync(string name) =>
-            RunNetshAsync($"interface set interface \"{name}\" admin=disabled");
-
+        /// <summary>
+        /// Waits for operational adapter status until the adapter timeout expires.
+        /// </summary>
         public static async Task<bool> WaitUntilUpAsync(string name)
         {
             var stopwatch = Stopwatch.StartNew();
@@ -62,19 +68,17 @@ namespace NetShiftST.Core
             return false;
         }
 
-        public static void LogAdapters(string context)
-        {
-            try
-            {
-                Logger.Log($"--- Adapters ({context}) ---");
-                foreach (var a in NetworkInterface.GetAllNetworkInterfaces())
-                    Logger.Log($"Name='{a.Name}' Description='{a.Description}' Type={a.NetworkInterfaceType} Status={a.OperationalStatus}");
-            }
-            catch (Exception ex)
-            {
-                Logger.Log($"Error listing adapters: {ex.Message}");
-            }
-        }
+        /// <summary>
+        /// Requests adapter enablement through netsh. Command failures are logged rather than returned.
+        /// </summary>
+        public static Task EnableAdapterAsync(string name) =>
+                    RunNetshAsync($"interface set interface \"{name}\" admin=enabled");
+
+        /// <summary>
+        /// Requests adapter disablement through netsh. Command failures are logged rather than returned.
+        /// </summary>
+        public static Task DisableAdapterAsync(string name) =>
+                    RunNetshAsync($"interface set interface \"{name}\" admin=disabled");
 
         private static async Task RunNetshAsync(string args)
         {
@@ -96,7 +100,7 @@ namespace NetShiftST.Core
                     return;
                 }
 
-                //read both streams while waiting so a full pipe cant block netsh
+                // Drain both streams concurrently so a full output pipe cannot block netsh.
                 var output = process.StandardOutput.ReadToEndAsync();
                 var error = process.StandardError.ReadToEndAsync();
                 await process.WaitForExitAsync();
@@ -112,5 +116,20 @@ namespace NetShiftST.Core
                 Logger.Log($"Error running netsh {args}: {ex.Message}");
             }
         }
+
+        public static void LogAdapters(string context)
+        {
+            try
+            {
+                Logger.Log($"--- Adapters ({context}) ---");
+                foreach (var a in NetworkInterface.GetAllNetworkInterfaces())
+                    Logger.Log($"Name='{a.Name}' Description='{a.Description}' Type={a.NetworkInterfaceType} Status={a.OperationalStatus}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Error listing adapters: {ex.Message}");
+            }
+        }
+
     }
 }
