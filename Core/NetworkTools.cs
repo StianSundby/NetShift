@@ -40,10 +40,10 @@ namespace NetShiftST.Core
         public static bool IsUp(string configuredName) =>
             FindAdapter(configuredName)?.OperationalStatus == OperationalStatus.Up;
 
-        public static Task<bool> EnableAdapterAsync(string name) =>
+        public static Task EnableAdapterAsync(string name) =>
             RunNetshAsync($"interface set interface \"{name}\" admin=enabled");
 
-        public static Task<bool> DisableAdapterAsync(string name) =>
+        public static Task DisableAdapterAsync(string name) =>
             RunNetshAsync($"interface set interface \"{name}\" admin=disabled");
 
         public static async Task<bool> WaitUntilUpAsync(string name)
@@ -58,7 +58,7 @@ namespace NetShiftST.Core
                 await Task.Delay(500);
             }
 
-            Logger.Log($"Timeout waiting for adapter '{name}' to come up.");
+            Logger.Log($"Timeout waiting for adapter '{name}' to come up");
             return false;
         }
 
@@ -76,7 +76,7 @@ namespace NetShiftST.Core
             }
         }
 
-        private static async Task<bool> RunNetshAsync(string args)
+        private static async Task RunNetshAsync(string args)
         {
             Logger.Log($"Executing: netsh {args}");
             var startInfo = new ProcessStartInfo("netsh", args)
@@ -93,7 +93,7 @@ namespace NetShiftST.Core
                 if (process == null)
                 {
                     Logger.Log("Could not start netsh.");
-                    return false;
+                    return;
                 }
 
                 //read both streams while waiting so a full pipe cant block netsh
@@ -106,12 +106,10 @@ namespace NetShiftST.Core
                 var stderr = (await error).Trim();
                 if (stdout.Length > 0) Logger.Log($"netsh output: {stdout}");
                 if (stderr.Length > 0) Logger.Log($"netsh error: {stderr}");
-                return process.ExitCode == 0;
             }
             catch (Exception ex)
             {
                 Logger.Log($"Error running netsh {args}: {ex.Message}");
-                return false;
             }
         }
     }
