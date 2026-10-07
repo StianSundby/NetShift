@@ -1,69 +1,134 @@
-# 🛜 NetShift 🌐 
+# 🛜 NetShift 🌐
 
-NetShift is a small Windows tray utility that monitors internet connectivity and automatically switches between Ethernet and Wi‑Fi adapters using `netsh`. It displays a tray icon (green/yellow/red) for the active/available network state and provides context-menu actions to force Ethernet or Wi‑Fi.
+NetShift is a Windows network utility that monitors internet connectivity and automatically switches between Ethernet and Wi-Fi adapters.
 
----
+The WPF interface provides network controls, configurable settings, live throughput and ping charts, and a compact monitor mode. A system tray icon keeps NetShift accessible when the window is hidden.
+
+> The WPF version is under development and will be released once complete. This README describes the WPF version; existing releases may differ.
 
 ## 🔑 Key features
-- Automatic network failover: switches to Wi‑Fi when Ethernet loses connectivity and back to Ethernet when connectivity is restored.
-- Tray icon with balloon notifications for status changes.
-- Manual "Force Ethernet" / "Force Wi‑Fi" actions via the tray context menu.
-- Configurable ping target and check interval.
-- Lightweight logging to log.txt for diagnostics (this will be removed in the final version).
-- Implements debounce/hysteresis to avoid rapid switching on unstable networks.
 
+- Automatic switching to Wi-Fi after consecutive failed connectivity checks while using Ethernet.
+- Automatic attempts to return to Ethernet after consecutive successful checks and a minimum period on Wi-Fi.
+- Manual **Force Ethernet** and **Force Wi-Fi** actions.
+- **Prevent Auto-Switching** toggle.
+- Live download, upload, and ping charts.
+- Compact monitor mode and an always-on-top option.
+- Tray status icons and notifications.
+- Configurable adapter names, ping target, check interval, and switching thresholds.
+- Start-with-Windows option.
+- Configurable close behavior: ask, minimize to tray, or exit.
+- Diagnostic logging.
 
 ## 📋 Requirements
-- Windows 10 or later (project targets `net8.0-windows10.0.19041.0`)
-- .NET 8
-- Administrator privileges required to run `netsh` commands.
+
+- Windows 10 version 2004 or later, or Windows 11.
+- Administrator privileges for enabling and disabling network adapters.
+- .NET 10 Desktop Runtime for framework-dependent builds. Self-contained builds include the runtime.
+- .NET 10 SDK to build from source.
+
+The project targets `net10.0-windows10.0.19041.0` and uses WPF for its main interface and Windows Forms components for its tray menu.
+
 ## 🚀 Installation
 
-Visit [Releases](https://github.com/StianSundby/NetShift/releases) and download the latest release.
-## 🛡️ Security & Permissions
-- NetShift runs `netsh` commands to enable/disable network adapters — Administrator rights are **required**. Exercise care when running elevated software.
-- No elevated network credentials are stored; the app executes local system commands.
+Published builds are available on the [Releases page](https://github.com/StianSundby/NetShift/releases).
+
+The updated WPF release is not yet available. To try the development version, build the `wpf` branch yourself.
+
+## Usage
+
+1. Run NetShift as Administrator.
+2. Confirm the Ethernet and Wi-Fi adapter names in the settings panel.
+3. Adjust the connectivity checks and switching thresholds if needed.
+4. Click **Save** to persist changes.
+
+Use **Force Ethernet** or **Force Wi-Fi** to request a manual switch. Enable **Prevent Auto-Switching** to pause automatic switching.
+
+## 🛡️ How automatic switching works
+
+NetShift periodically sends a ping to the configured target (defaults to Google DNS `8.8.8.8`).
+
+- While using Ethernet, consecutive failed checks trigger an attempt to switch to Wi-Fi.
+- While using Wi-Fi, consecutive successful checks trigger an attempt to return to Ethernet once the minimum Wi-Fi uptime has elapsed.
+- During a switch, NetShift enables the requested adapter and waits for it to become operational before requesting that the other adapter be disabled.
+
+The thresholds reduce switching caused by isolated failed checks.
+
+### Current limitations
+
+- A failed ping can indicate an unreachable target or blocked traffic, rather than a complete internet outage.
+- An operational adapter does not necessarily have working internet access.
+- Successful checks over Wi-Fi do not independently verify that Ethernet connectivity has recovered.
+- Enabling or disabling adapters can interrupt active connections.
+
 ## ⚙️ Configuration
 
-NetShift reads settings from `settings.cfg` (in the app folder). If missing, defaults are used.
+Settings can be edited in the application or directly in `settings.cfg`, located beside the executable. If the file is missing, NetShift uses its defaults.
 
-Example `settings.cfg`:
+Use one `key=value` setting per line. Do not add quotes, commas, or inline comments.
 
+```ini
+ethernetname=Wu-Tag LAN
+wifiname=Silence of the LANS
+pingtarget=8.8.8.8
+checkintervalseconds=15
+failurethreshold=3
+successthreshold=2
+minwifiuptimeseconds=10
+closeaction=Ask
 ```
-EthernetName — "Ethernet", //adapter name (or substring) for the Ethernet interface.
-WiFiName — "8HzWANIP",     //adapter name (or substring/description) for the Wi‑Fi interface.
-PingTarget — 8.8.8.8,      //host to ping to verify internet (default: 8.8.8.8).
-CheckIntervalSeconds — 15  //polling interval in seconds.
-DebounceSeconds — 2,       //wait this long (in seconds) after connectivity change before switching (to prevent flapping).
-HysteresisMinutes — 5      //minimum duration (in seconds) for a connection state before considering revert (helps stabilize transitions).
-```
+
+| Setting | Description |
+|---|---|
+| `ethernetname` | Name of the Ethernet adapter. |
+| `wifiname` | Name of the Wi-Fi adapter. |
+| `pingtarget` | Hostname or IP address used for connectivity checks. |
+| `checkintervalseconds` | Time between monitoring checks, in seconds. |
+| `failurethreshold` | Consecutive failures required before attempting Wi-Fi failover. |
+| `successthreshold` | Consecutive successes required before attempting a return to Ethernet. |
+| `minwifiuptimeseconds` | Minimum time on Wi-Fi before attempting a return to Ethernet. |
+| `closeaction` | `Ask`, `MinimizeToTray`, or `Exit`. |
+
+**Use the exact Windows adapter names where possible.** Status lookup also supports partial names and descriptions, but adapter commands require a valid interface name.
+
+Restart NetShift after editing the configuration file manually.
+
+## Permissions
+
+NetShift uses local `netsh` commands to enable and disable network adapters. These operations require Administrator privileges.
+
+The **Start with Windows** option attempts to register a scheduled task with elevated privileges and falls back to registry startup if task creation fails. Registry startup does not automatically grant elevation.
+
 ## 🛠️ Troubleshooting
 
-- log.txt (application folder) contains runtime events, `netsh` output, adapter enumeration and errors.
-- If switching fails:
-  - Confirm adapter names in log.txt and adjust `settings.cfg`.
-  - Ensure the process is running as Administrator (`netsh` requires elevated permissions).
-  - Check that icons exist under `res/ico` (green.ico / yellow.ico / red.ico).
-  - Verify the ping target is reachable from your network or change it in `settings.cfg`.
-## Run Locally
+Diagnostic information is written to `log.txt` beside the executable, including adapter details, connectivity checks, switching events, and command output.
 
-Clone the project
+If switching fails:
 
-```bash
-    git clone https://github.com/StianSundby/NetShift
+- Confirm that NetShift is running as Administrator.
+- Check adapter names in Windows network settings or `log.txt`.
+- Verify that the configured ping target is reachable and accepts ICMP traffic.
+- Check whether Ethernet has a physical connection and Wi-Fi can connect to a network.
+
+If tray icons are missing, confirm that these files are present under `res/ico`:
+
+- `green.ico` — Ethernet
+- `yellow.ico` — Wi-Fi
+- `red.ico` — Offline
+
+The application folder must be writable to save settings and diagnostic logs.
+
+## Build from source
+
+Clone the WPF development branch:
+
+```powershell
+git clone --branch wpf https://github.com/StianSundby/NetShift.git
+cd NetShift
 ```
 
- Note: because the project is a WinForms tray app, running from the CLI is useful for publishing; prefer running from Visual Studio for interactive debugging.
+Build with the .NET 10 SDK:
 
-Using Visual Studio 2022
-1. Open the solution (NetShift.sln).
-2. Set `NetShift` as the startup project.
-3. Run Visual Studio as Administrator.
-4. Select configuration __Debug__ or __Release__ and press __F5__ or use __Debug > Start Debugging__ / __Debug > Start Without Debugging__.
-## Contributing
-
-- Pull requests welcome. Keep changes small and focused.
-- NetworkManager contains lots of side effects; consider abstraction for netsh/ping when adding tests)
-## License
-
-[MIT](https://github.com/StianSundby/NetShift/blob/main/LICENSE)
+```powershell
+dotnet build NetShiftST.csproj
+```
