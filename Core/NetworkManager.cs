@@ -3,8 +3,13 @@
 namespace NetShiftST.Core
 {
     public enum IconState { Offline, Ethernet, WiFi }
+
+    /// <summary>
+    /// Monitors connectivity and switches between the configured Ethernet and Wi-Fi adapters
+    /// </summary>
     public class NetworkManager
     {
+        #region Properties
         private readonly Config _config;
         private bool _onEthernet = true;
         private int _failures; //consecutive failed pings
@@ -17,6 +22,7 @@ namespace NetShiftST.Core
 
         public event Action<string, string>? StatusChanged;
         public event Action<IconState>? IconChanged;
+        #endregion
 
         public NetworkManager(Config config)
         {
@@ -36,6 +42,9 @@ namespace NetShiftST.Core
             }
         }
 
+        /// <summary>
+        /// Initializes the displayed network state from adapter status and a connectivity probe
+        /// </summary>
         public async Task InitializeAsync()
         {
             try
@@ -59,19 +68,10 @@ namespace NetShiftST.Core
             }
         }
 
-        private void UseEthernet()
-        {
-            _onEthernet = true;
-            IconChanged?.Invoke(IconState.Ethernet);
-        }
-
-        private void UseWiFi()
-        {
-            _onEthernet = false;
-            _wifiSince = DateTime.UtcNow;
-            IconChanged?.Invoke(IconState.WiFi);
-        }
-
+        /// <summary>
+        /// Checks connectivity and applies failure, success and minimum Wi-Fi uptime thresholds.
+        /// Skips checks while busy or automatic switching is prevented
+        /// </summary>
         public async Task CheckAsync()
         {
             if (PreventAutoSwitching)
@@ -81,8 +81,10 @@ namespace NetShiftST.Core
                 return;
             }
 
-            if (_busy) return;
+            if (_busy) 
+                return;
             _busy = true;
+
             try
             {
                 bool online = await NetworkTools.PingAsync(_config.PingTarget);
@@ -96,6 +98,16 @@ namespace NetShiftST.Core
                 _busy = false;
             }
         }
+
+        /// <summary>
+        /// Requests a switch to Ethernet. The request is skipped while another operation is busy
+        /// </summary>
+        public Task ForceEthernetAsync() => ForceAsync(ethernet: true);
+
+        /// <summary>
+        /// Requests a switch to Wi-Fi. The request is skipped while another operation is busy
+        /// </summary>
+        public Task ForceWiFiAsync() => ForceAsync(ethernet: false);
 
         private async Task OnPingFailedAsync()
         {
@@ -151,8 +163,6 @@ namespace NetShiftST.Core
             await SwitchToAsync(ethernet: true);
         }
 
-        public Task ForceEthernetAsync() => ForceAsync(ethernet: true);
-        public Task ForceWiFiAsync() => ForceAsync(ethernet: false);
         private async Task ForceAsync(bool ethernet)
         {
             if (_busy) return;
@@ -222,5 +232,17 @@ namespace NetShiftST.Core
                 $"Now using {to}");
         }
 
+        private void UseEthernet()
+        {
+            _onEthernet = true;
+            IconChanged?.Invoke(IconState.Ethernet);
+        }
+
+        private void UseWiFi()
+        {
+            _onEthernet = false;
+            _wifiSince = DateTime.UtcNow;
+            IconChanged?.Invoke(IconState.WiFi);
+        }
     }
 }

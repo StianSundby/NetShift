@@ -4,8 +4,13 @@ using System.IO;
 namespace NetShiftST.Core
 {
     public enum CloseAction { Ask, MinimizeToTray, Exit}
+    
+    /// <summary>
+    /// Stores connection thresholds and application preferences in a key-value settings file
+    /// </summary>
     public class Config
     {
+        #region Properties
         public string EthernetName { get; set; } = "Ethernet";
         public string WiFiName { get; set; } = "Wi-Fi";
         public string PingTarget { get; set; } = "8.8.8.8";
@@ -13,8 +18,15 @@ namespace NetShiftST.Core
         public int FailureThreshold { get; set; } = 3;
         public int SuccessThreshold { get; set; } = 2;
         public int MinWifiUptimeSeconds { get; set; } = 10;
-        public CloseAction CloseAction { get; set; } = CloseAction.Ask;
 
+        public CloseAction CloseAction { get; set; } = CloseAction.Ask;
+        #endregion
+
+        /// <summary>
+        /// Loads settings, retaining defaults
+        /// </summary>
+        /// <param name="path">Location of settings.cfg</param>
+        /// <returns></returns>
         public static Config Load(string path)
         {
             var cfg = new Config();
@@ -51,6 +63,10 @@ namespace NetShiftST.Core
             return cfg;
         }
 
+        /// <summary>
+        /// Writes the current settings to the specified file
+        /// </summary>
+        /// <param name="path">Location of settings.cfg</param>
         public void Save(string path)
         {
             File.WriteAllLines(path,

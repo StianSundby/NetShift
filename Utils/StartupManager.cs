@@ -3,6 +3,9 @@ using Microsoft.Win32;
 
 namespace NetShiftST.Utils
 {
+    /// <summary>
+    /// Manages Windows startup using a scheduled task with registry fallback
+    /// </summary>
     public sealed class StartupManager
     {
         private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -13,7 +16,11 @@ namespace NetShiftST.Utils
         {
             _appName = string.IsNullOrWhiteSpace(appName) ? throw new ArgumentNullException(nameof(appName)) : appName;
         }
-        
+
+        /// <summary>
+        /// Checks for the named scheduled task, then the current executable in registry startup
+        /// </summary>
+        /// <returns>True if enable, false if disabled</returns>
         public bool IsStartupEnabled()
         {
             try
@@ -46,6 +53,11 @@ namespace NetShiftST.Utils
             }
         }
 
+        /// <summary>
+        /// Changes startup registration, preferring scheduled tasks and falling back to the registry.
+        /// </summary>
+        /// <param name="enabled">True to enable, False to disable</param>
+        /// <returns>True if success, false if failed</returns>
         public bool SetStartupEnabled(bool enabled)
         {
             bool success;
@@ -83,38 +95,12 @@ namespace NetShiftST.Utils
             return success;
         }
 
-        private bool SetRegistryStartup(bool enabled)
-        {
-            try
-            {
-                using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true) 
-                    ?? Registry.CurrentUser.CreateSubKey(RunKey);
-
-                if (key == null) 
-                    return false;
-
-                if (enabled)
-                {
-                    var exe = Environment.ProcessPath!;
-                    key.SetValue(_appName, $"\"{exe}\"", RegistryValueKind.String);
-                }
-                else key.DeleteValue(_appName, throwOnMissingValue: false);
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Logger.Log($"SetRegistryStartup error: {ex.Message}");
-                return false;
-            }
-        }
-
         private bool IsScheduledTaskPresent()
         {
             var result = RunScheduledTasks($"/Query /TN \"{_appName}\"");
             return result.success;
         }
-        
+
         private bool CreateScheduledTask()
         {
             var exe = Environment.ProcessPath!;
@@ -151,6 +137,32 @@ namespace NetShiftST.Utils
 
             Logger.Log($"DeleteScheduledTask failed: {result.output}");
             return false;
+        }
+
+        private bool SetRegistryStartup(bool enabled)
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true) 
+                    ?? Registry.CurrentUser.CreateSubKey(RunKey);
+
+                if (key == null) 
+                    return false;
+
+                if (enabled)
+                {
+                    var exe = Environment.ProcessPath!;
+                    key.SetValue(_appName, $"\"{exe}\"", RegistryValueKind.String);
+                }
+                else key.DeleteValue(_appName, throwOnMissingValue: false);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"SetRegistryStartup error: {ex.Message}");
+                return false;
+            }
         }
 
         private static (bool success, string? output) RunScheduledTasks(string args, int timeoutMs = 10000)

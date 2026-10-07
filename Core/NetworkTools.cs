@@ -4,11 +4,49 @@ using System.Net.NetworkInformation;
 
 namespace NetShiftST.Core
 {
+    /// <summary>
+    /// Provides adapter lookup, connectivity probes, adapter commands, and diagnostics.
+    /// </summary>
     internal static class NetworkTools
     {
         private const int PingTimeoutMs = 2000;
         private const int AdapterUpTimeoutMs = 10000;
 
+        /// <summary>
+        /// Finds an adapter by exact name, then partial name or description. Partial matches select the first matching adapter.
+        /// </summary>
+        /// <param name="configuredName">The adapter the find by name</param>
+        public static NetworkInterface? FindAdapter(string configuredName)
+        {
+            if (string.IsNullOrWhiteSpace(configuredName))
+                return null;
+
+            var adapters = NetworkInterface.GetAllNetworkInterfaces();
+            const StringComparison ignoreCase = StringComparison.OrdinalIgnoreCase;
+
+            return adapters.FirstOrDefault(a => a.Name.Equals(configuredName, ignoreCase))
+                ?? adapters.FirstOrDefault(a => a.Name.Contains(configuredName, ignoreCase))
+                ?? adapters.FirstOrDefault(a => a.Description.Contains(configuredName, ignoreCase));
+        }
+
+        /// <summary>
+        /// Checks operational adapter status
+        /// </summary>
+        /// <param name="configuredName">The name of the adapter to check</param>
+        /// <remarks>
+        /// This does not verify internet connectivity.
+        /// </remarks>
+        public static bool IsUp(string configuredName) =>
+            FindAdapter(configuredName)?.OperationalStatus == OperationalStatus.Up;
+
+        /// <summary>
+        /// Sends a ping to the target using the configured ping timeout.
+        /// </summary>
+        /// <param name="target">The hostname or IP address to ping</param>
+        /// <returns>
+        /// True if a successful reply is received, otherwise false.
+        /// Exceptions are logged and treated as failed probes
+        /// </returns>
         public static async Task<bool> PingAsync(string target)
         {
             try
@@ -24,28 +62,10 @@ namespace NetShiftST.Core
             }
         }
 
-        public static NetworkInterface? FindAdapter(string configuredName)
-        {
-            if (string.IsNullOrWhiteSpace(configuredName))
-                return null;
-
-            var adapters = NetworkInterface.GetAllNetworkInterfaces();
-            const StringComparison ignoreCase = StringComparison.OrdinalIgnoreCase;
-
-            return adapters.FirstOrDefault(a => a.Name.Equals(configuredName, ignoreCase))
-                ?? adapters.FirstOrDefault(a => a.Name.Contains(configuredName, ignoreCase))
-                ?? adapters.FirstOrDefault(a => a.Description.Contains(configuredName, ignoreCase));
-        }
-
-        public static bool IsUp(string configuredName) =>
-            FindAdapter(configuredName)?.OperationalStatus == OperationalStatus.Up;
-
-        public static Task EnableAdapterAsync(string name) =>
-            RunNetshAsync($"interface set interface \"{name}\" admin=enabled");
-
-        public static Task DisableAdapterAsync(string name) =>
-            RunNetshAsync($"interface set interface \"{name}\" admin=disabled");
-
+        /// <summary>
+        /// Waits for operational adapter status until the adapter timeout expires
+        /// </summary>
+        /// <param name="name">Name of adapter to wait for</param>
         public static async Task<bool> WaitUntilUpAsync(string name)
         {
             var stopwatch = Stopwatch.StartNew();
@@ -62,6 +82,26 @@ namespace NetShiftST.Core
             return false;
         }
 
+        /// <summary>
+        /// Requests adapter enabling through netsh. Command failures are logged
+        /// </summary>
+        /// <param name="name">Name of adapter to enable</param>
+        public static Task EnableAdapterAsync(string name) =>
+            RunNetshAsync($"interface set interface \"{name}\" admin=enabled");
+
+        /// <summary>
+        /// Requests adapter disabling through netsh. Command failures are logged
+        /// </summary>
+        /// <param name="name">Name of adapter to disable</param>
+        public static Task DisableAdapterAsync(string name) =>
+            RunNetshAsync($"interface set interface \"{name}\" admin=disabled");
+
+        /// <summary>
+        /// Logs the name, description, type, and operational status of every network adapter.
+        /// </summary>
+        /// <param name="context">
+        /// When or why the adapter snapshot is being recorded.
+        /// </param>
         public static void LogAdapters(string context)
         {
             try

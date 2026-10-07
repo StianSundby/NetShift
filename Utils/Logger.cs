@@ -2,9 +2,17 @@
 
 namespace NetShiftST.Utils
 {
+    /// <summary>
+    /// Appends timestamped diagnostic messages to the application log
+    /// </summary>
     public static class Logger
     {
         private static readonly string LogFile = Path.Combine(AppContext.BaseDirectory, "log.txt");
+
+        /// <summary>
+        /// Appends a message to the log file with a timestamp in local time
+        /// </summary>
+        /// <param name="message">The message to record</param>
         public static void Log(string message)
         {
             try
