@@ -1,7 +1,6 @@
 ﻿using NetShiftST.Utils;
 using NetShiftST.Core;
 using System.Windows;
-using System.IO;
 
 namespace NetShiftST
 {
@@ -23,9 +22,7 @@ namespace NetShiftST
                 args.Handled = true;
             };
 
-            _config = Config.Load(
-            Path.Combine(AppContext.BaseDirectory, "settings.cfg"));
-
+            _config = Config.Load(AppPaths.ConfigFile);
             _network = new NetworkManager(_config);
             _startup = new StartupManager("NetShift");
 
