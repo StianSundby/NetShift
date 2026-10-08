@@ -1,11 +1,13 @@
 ﻿using LiveChartsCore.Defaults;
 using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Painting;
 using NetShiftST.Core;
 using NetShiftST.Utils;
+using SkiaSharp;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Net.NetworkInformation;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
@@ -22,7 +24,7 @@ namespace NetShiftST
         private readonly Config _config;
         private readonly NetworkManager _network;
         private readonly StartupManager _startup;
-        private readonly string _configPath = Path.Combine(AppContext.BaseDirectory, "settings.cfg");
+        private readonly string _configPath = AppPaths.ConfigFile;
 
         private readonly DispatcherTimer _networkTimer;
         private readonly DispatcherTimer _feedbackTimer;
@@ -49,9 +51,9 @@ namespace NetShiftST
 
             InitializeComponent();
 
-            _feedbackTimer = new DispatcherTimer{ Interval = TimeSpan.FromSeconds(4) };
+            _feedbackTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
 
-            _feedbackTimer.Tick += (_, _) => 
+            _feedbackTimer.Tick += (_, _) =>
             {
                 _feedbackTimer.Stop();
                 FeedbackText.Text = "";
@@ -100,11 +102,13 @@ namespace NetShiftST
 
         private void SetUpCharts()
         {
+            ThroughputChart.LegendTextPaint = new SolidColorPaint(SKColor.Parse("#A9B8CD"));
             ThroughputChart.Series =
             [
                 new LineSeries<ObservableValue>
                 {
                     Name = "Download",
+                    Stroke = new SolidColorPaint(SKColor.Parse("#67E8CA"), 2.5f),
                     Values = _downloadValues,
                     GeometrySize = 0,
                     Fill = null
@@ -113,6 +117,7 @@ namespace NetShiftST
                 new LineSeries<ObservableValue>
                 {
                     Name = "Upload",
+                    Stroke = new SolidColorPaint(SKColor.Parse("#81A7FF"), 2.5f),
                     Values = _uploadValues,
                     GeometrySize = 0,
                     Fill = null
@@ -132,6 +137,9 @@ namespace NetShiftST
                 new Axis
                 {
                     MinLimit = 0,
+                    LabelsPaint = new SolidColorPaint(SKColor.Parse("#A9B8CD")),
+                    SeparatorsPaint = new SolidColorPaint(SKColor.Parse("#2B374A")),
+                    TextSize = 11,
                     MinStep = 1,
                     Labeler = value => $"{value:0.#}"
                 }
@@ -142,6 +150,7 @@ namespace NetShiftST
                 new LineSeries<ObservableValue>
                 {
                     Name = "Ping",
+                    Stroke = new SolidColorPaint(SKColor.Parse("#C4A4FF"), 2.5f),
                     Values = _pingValues,
                     GeometrySize = 0,
                     Fill = null
@@ -161,6 +170,9 @@ namespace NetShiftST
                 new Axis
                 {
                     MinLimit = 0,
+                    LabelsPaint = new SolidColorPaint(SKColor.Parse("#A9B8CD")),
+                    SeparatorsPaint = new SolidColorPaint(SKColor.Parse("#2B374A")),
+                    TextSize = 11,
                     MinStep = 5,
                     Labeler = value => $"{value:0}"
                 }
@@ -478,17 +490,38 @@ namespace NetShiftST
             SettingsPanel.Visibility = Visibility.Collapsed;
             NormalWindowControls.Visibility = Visibility.Collapsed;
 
-            MonitorHeader.Visibility = Visibility.Visible;
+            GraphArea.SetValue(Grid.ColumnProperty, 0);
+            GraphArea.SetValue(Grid.ColumnSpanProperty, 5);
 
             MainColumn.Width = new GridLength(0);
             SettingsColumn.Width = new GridLength(0);
-            GraphsColumn.Width = new GridLength(1, GridUnitType.Star);
 
-            Width = 700;
-            Height = 500;
-            MinWidth = 700;
-            MinHeight = 500;
+            RootGrid.Margin = new Thickness(12);
+
+            MonitorHeader.Visibility = Visibility.Visible;
             MonitorHeaderRow.Height = GridLength.Auto;
+
+            MonitorHeader.RowDefinitions.Clear();
+            MonitorHeader.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            MonitorHeader.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            Grid.SetRow(MonitorStatusText, 0);
+            Grid.SetColumn(MonitorStatusText, 0);
+            Grid.SetColumnSpan(MonitorStatusText, 2);
+
+            Grid.SetRow(MonitorControls, 1);
+            Grid.SetColumn(MonitorControls, 0);
+            Grid.SetColumnSpan(MonitorControls, 2);
+
+            MonitorControls.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
+            MonitorControls.Margin = new Thickness(0, 10, 0, 0);
+
+            MinWidth = 340;
+            MinHeight = 420;
+            Width = 380;
+            Height = 520;
+
+            ResizeMode = ResizeMode.CanResizeWithGrip;
 
             UpdateMonitorStatus();
         }
@@ -504,18 +537,24 @@ namespace NetShiftST
             SettingsPanel.Visibility = Visibility.Visible;
             NormalWindowControls.Visibility = Visibility.Visible;
 
-            MonitorHeader.Visibility = Visibility.Collapsed;
+            Grid.SetColumn(GraphArea, 4);
+            Grid.SetColumnSpan(GraphArea, 1);
 
-            MainColumn.Width = new GridLength(170);
-            SettingsColumn.Width = new GridLength(250);
+            MainColumn.Width = new GridLength(200);
+            SettingsColumn.Width = new GridLength(310);
             GraphsColumn.Width = new GridLength(1, GridUnitType.Star);
 
-            Width = 900;
-            Height = 440;
-            MinWidth = 900;
-            MinHeight = 440;
+            RootGrid.Margin = new Thickness(24);
 
+            MonitorHeader.Visibility = Visibility.Collapsed;
             MonitorHeaderRow.Height = new GridLength(0);
+
+            ResizeMode = ResizeMode.NoResize;
+
+            Width = 1120;
+            Height = 700;
+            MinWidth = 1120;
+            MinHeight = 700;
         }
 
         private void AlwaysOnTopButton_Click(object sender, RoutedEventArgs e)

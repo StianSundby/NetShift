@@ -1,15 +1,18 @@
 ﻿<Window x:Class="NetShiftST.CloseConfirmationWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="NetShift"
-        Width="400"
-        Height="190"
+        Style="{StaticResource {x:Type Window}}" Title="NetShift"
+        Width="470"
+        Height="260"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
-        Background="#29292E">
+        Background="#0C121D"
+        Foreground="#EEF4FC"
+        FontFamily="Segoe UI"
+        FontSize="13"
+        UseLayoutRounding="True">
 
-    <Grid Margin="20">
-
+    <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -25,7 +28,7 @@
         <TextBlock Grid.Row="1"
                    Margin="0,8,0,0"
                    Text="NetShift can continue running in the system tray."
-                   Foreground="#BBBBBB"/>
+                   Foreground="#A9B8CD"/>
 
         <CheckBox x:Name="DontAskAgainCheckBox"
                   Grid.Row="2"
@@ -44,7 +47,8 @@
                     Click="CancelButton_Click"/>
 
             <Button Content="Minimize to tray"
-                    Width="110"
+                    Style="{StaticResource PrimaryButton}"
+                    Width="145"
                     Margin="0,0,8,0"
                     Click="MinimizeButton_Click"/>
 
