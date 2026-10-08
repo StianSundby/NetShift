@@ -4,7 +4,6 @@ NetShift is a Windows network utility that monitors internet connectivity and au
 
 The WPF interface provides network controls, configurable settings, live throughput and ping charts, and a compact monitor mode. A system tray icon keeps NetShift accessible when the window is hidden.
 
-> The WPF version is under development and will be released once complete. This README describes the WPF version; existing releases may differ.
 
 ## 🔑 Key features
 
@@ -32,8 +31,6 @@ The project targets `net10.0-windows10.0.19041.0` and uses WPF for its main inte
 ## 🚀 Installation
 
 Published builds are available on the [Releases page](https://github.com/StianSundby/NetShift/releases).
-
-The updated WPF release is not yet available. To try the development version, build the `wpf` branch yourself.
 
 ## Usage
 
