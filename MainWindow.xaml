@@ -1,397 +1,195 @@
 ﻿<Window x:Class="NetShiftST.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
-        mc:Ignorable="d"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="NetShift"
-        Width="900"
-        Height="440"
-        MinWidth="900"
-        MinHeight="440"
+        Width="1120"
+        Height="700"
+        MinWidth="1120"
+        MinHeight="700"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
-        Background="#29292E"
-        Foreground="White">
-
-    <Window.Resources>
-
-        <Style TargetType="TextBox">
-            <Setter Property="Height" Value="26"/>
-            <Setter Property="Padding" Value="5,2"/>
-            <Setter Property="Background" Value="#5A5A5E"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#77777D"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </Style>
-
-        <Style x:Key="InfoIconStyle" TargetType="TextBlock">
-            <Setter Property="Text" Value="ⓘ"/>
-            <Setter Property="FontSize" Value="15"/>
-            <Setter Property="Foreground" Value="#C8C8CC"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="7,0,0,0"/>
-        </Style>
-
-        <Style x:Key="SectionHeadingStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="21"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="White"/>
-        </Style>
-
-        <Style x:Key="SettingLabelStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-
-    </Window.Resources>
-
-
-    <Grid x:Name="RootGrid" Margin="24">
-
+        Background="#0C121D"
+        Foreground="#EEF4FC"
+        FontFamily="Segoe UI"
+        FontSize="13"
+        UseLayoutRounding="True"
+        WindowStyle="None">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="54"
+                        ResizeBorderThickness="6"
+                        GlassFrameThickness="0"
+                        CornerRadius="0"/>
+    </shell:WindowChrome.WindowChrome>
+    <Grid x:Name="RootGrid" Background="#0C121D" Margin="24">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition x:Name="MainColumn" Width="170"/>
-            <ColumnDefinition Width="20"/>
-            <ColumnDefinition x:Name="SettingsColumn" Width="250"/>
-            <ColumnDefinition Width="20"/>
+            <ColumnDefinition x:Name="MainColumn" Width="200"/>
+            <ColumnDefinition Width="16"/>
+            <ColumnDefinition x:Name="SettingsColumn" Width="310"/>
+            <ColumnDefinition Width="16"/>
             <ColumnDefinition x:Name="GraphsColumn" Width="*"/>
         </Grid.ColumnDefinitions>
-
-
-        <!-- =========================================================
-             MAIN
-             ========================================================= -->
-
-        <Grid x:Name="MainPanel" Grid.Column="0">
-
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="22"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="8"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="28"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-
-            <TextBlock Text="NetShift" Style="{StaticResource SectionHeadingStyle}"/>
-
-            <Button Grid.Row="2" Content="Force Ethernet" Height="32" Click="ForceEthernetButton_Click"/>
-            <Button Grid.Row="4" Content="Force Wi-Fi" Height="32" Click="ForceWiFiButton_Click"/>
-
-            <StackPanel Grid.Row="6">
-                <TextBlock x:Name="NetworkStatusText" Text="Checking network..." FontSize="14" FontWeight="SemiBold" Foreground="White"/>
-                <TextBlock x:Name="NetworkDetailText" Margin="0,5,0,0" FontSize="12" Foreground="#AFAFB5"/>
-                <TextBlock x:Name="FeedbackText" Margin="0,14,0,0" FontSize="12" Foreground="#AFAFB5" TextWrapping="Wrap"/>
-            </StackPanel>
-
-            <Button x:Name="MonitorModeButton" Grid.Row="8" Content="Monitor Mode" Height="32" Click="MonitorModeButton_Click"/>
-
+        <Grid.RowDefinitions>
+            <RowDefinition Height="54"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <StackPanel Grid.ColumnSpan="5" Orientation="Horizontal" VerticalAlignment="Top">
+            <Border Background="#67E8CA" CornerRadius="8" Width="32" Height="32" Margin="0,0,12,0">
+                <TextBlock Text="⇄" FontSize="23" Foreground="#102B29" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <TextBlock Text="NetShift" FontSize="23" FontWeight="SemiBold"/>
+            <TextBlock Text="NETWORK CONTROL" Foreground="#A9B8CD" FontSize="10" Margin="16,11,0,0"/>
+        </StackPanel>
+        <StackPanel x:Name="NormalWindowControls" shell:WindowChrome.IsHitTestVisibleInChrome="True" Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+            <Button Content="−" Width="36" Padding="0" Margin="0,0,6,0" ToolTip="Minimize" AutomationProperties.Name="Minimize" Click="MinimizeButton_Click"/>
+            <Button Content="×" Width="36" Padding="0" ToolTip="Close window" AutomationProperties.Name="Close window" Click="CloseButton_Click"/>
+        </StackPanel>
+        <Grid x:Name="MainPanel" Grid.Row="1">
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="CONNECTION" Style="{StaticResource Caption}"/>
+                        <TextBlock x:Name="NetworkStatusText" Text="Checking network..." FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        <TextBlock x:Name="NetworkDetailText" Foreground="#67E8CA" TextWrapping="Wrap" Margin="0,7,0,24"/>
+                        <Border Height="1" Background="#2B374A" Margin="0,0,0,24"/>
+                        <TextBlock Text="Switch connection" Style="{StaticResource Caption}"/>
+                        <Button Content="Force Ethernet" Style="{StaticResource PrimaryButton}" Click="ForceEthernetButton_Click" Margin="0,5,0,10"/>
+                        <Button Content="Force Wi-Fi" Click="ForceWiFiButton_Click"/>
+                        <TextBlock x:Name="FeedbackText" Margin="0,20,0,0" Foreground="#A9B8CD" TextWrapping="Wrap" FontSize="12"/>
+                    </StackPanel>
+                    <StackPanel Grid.Row="2">
+                        <TextBlock Text="A smaller view of your network." Foreground="#A9B8CD" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                        <Button x:Name="MonitorModeButton" Content="Open monitor" Click="MonitorModeButton_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
         </Grid>
-
-
-        <!-- =========================================================
-             SETTINGS
-             ========================================================= -->
-
-        <Grid x:Name="SettingsPanel" Grid.Column="2">
-
-            <Grid.RowDefinitions>
-                <RowDefinition Height="36"/>
-                <RowDefinition Height="30"/>
-                <RowDefinition Height="30"/>
-                <RowDefinition Height="34"/>
-                <RowDefinition Height="34"/>
-                <RowDefinition Height="34"/>
-                <RowDefinition Height="38"/>
-                <RowDefinition Height="38"/>
-                <RowDefinition Height="38"/>
-                <RowDefinition Height="38"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-
-            <!-- Heading -->
-
-            <Grid Grid.Row="0">
-                <TextBlock Text="Settings" Style="{StaticResource SectionHeadingStyle}"/>
-                <Button x:Name="SaveButton" Content="Save" Width="50" Height="24" HorizontalAlignment="Right" VerticalAlignment="Top"
-                        Visibility="Collapsed" Click="SaveButton_Click"/>
-            </Grid>
-
-
-            <!-- Checkboxes -->
-
-            <CheckBox x:Name="StartWithWindowsCheckBox" Grid.Row="1" Content="Start with Windows" VerticalAlignment="Center"
-                      Foreground="White" Checked="StartWithWindows_Changed" Unchecked="StartWithWindows_Changed"/>
-
-            <CheckBox x:Name="PreventAutoSwitchingCheckBox" Grid.Row="2" Content="Prevent auto-switching" VerticalAlignment="Center"
-                      Foreground="White" Checked="PreventAutoSwitching_Changed" Unchecked="PreventAutoSwitching_Changed"/>
-
-
-            <!-- Wi-Fi adapter -->
-
-            <Grid Grid.Row="3">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBox x:Name="WiFiNameTextBox" TextChanged="Setting_Changed"/>
-
-                <TextBlock Grid.Column="1" Style="{StaticResource InfoIconStyle}">
-                    <TextBlock.ToolTip>
-                        <ToolTip Content="Name of the Windows network adapter NetShift should use for Wi-Fi."/>
-                    </TextBlock.ToolTip>
-                </TextBlock>
-            </Grid>
-
-
-            <!-- Ethernet adapter -->
-
-            <Grid Grid.Row="4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBox x:Name="EthernetNameTextBox" TextChanged="Setting_Changed"/>
-
-                <TextBlock Grid.Column="1" Style="{StaticResource InfoIconStyle}">
-                    <TextBlock.ToolTip>
-                        <ToolTip Content="Name of the Windows network adapter NetShift should use for Ethernet."/>
-                    </TextBlock.ToolTip>
-                </TextBlock>
-            </Grid>
-
-
-            <!-- Ping target -->
-
-            <Grid Grid.Row="5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBox x:Name="PingTargetTextBox" TextChanged="Setting_Changed"/>
-
-                <TextBlock Grid.Column="1" Style="{StaticResource InfoIconStyle}">
-                    <TextBlock.ToolTip>
-                        <ToolTip Content="Address NetShift pings to check whether the current connection has internet access. Example: 8.8.8.8."/>
-                    </TextBlock.ToolTip>
-                </TextBlock>
-            </Grid>
-
-
-            <!-- Check interval -->
-
-            <Grid Grid.Row="6">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="60"/>
-                    <ColumnDefinition Width="30"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Text="Check interval" Style="{StaticResource SettingLabelStyle}"/>
-                <TextBox x:Name="CheckIntervalTextBox" Grid.Column="1" TextChanged="Setting_Changed"/>
-                <TextBlock Grid.Column="2" Text="sec" Margin="5,0,0,0" Foreground="#AFAFB5" VerticalAlignment="Center"/>
-
-                <TextBlock Grid.Column="3" Style="{StaticResource InfoIconStyle}">
-                    <TextBlock.ToolTip>
-                        <ToolTip Content="How many seconds NetShift waits between automatic connection checks."/>
-                    </TextBlock.ToolTip>
-                </TextBlock>
-            </Grid>
-
-
-            <!-- Failure threshold -->
-
-            <Grid Grid.Row="7">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="60"/>
-                    <ColumnDefinition Width="30"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Text="Failure threshold" Style="{StaticResource SettingLabelStyle}"/>
-                <TextBox x:Name="FailureThresholdTextBox" Grid.Column="1" TextChanged="Setting_Changed"/>
-
-                <TextBlock Grid.Column="3" Style="{StaticResource InfoIconStyle}">
-                    <TextBlock.ToolTip>
-                        <ToolTip Content="Number of consecutive failed connection checks required before NetShift switches from Ethernet to Wi-Fi."/>
-                    </TextBlock.ToolTip>
-                </TextBlock>
-            </Grid>
-
-
-            <!-- Success threshold -->
-
-            <Grid Grid.Row="8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="60"/>
-                    <ColumnDefinition Width="30"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Text="Success threshold" Style="{StaticResource SettingLabelStyle}"/>
-                <TextBox x:Name="SuccessThresholdTextBox" Grid.Column="1" TextChanged="Setting_Changed"/>
-
-                <TextBlock Grid.Column="3" Style="{StaticResource InfoIconStyle}">
-                    <TextBlock.ToolTip>
-                        <ToolTip Content="Number of consecutive successful checks required before NetShift considers switching back to Ethernet."/>
-                    </TextBlock.ToolTip>
-                </TextBlock>
-            </Grid>
-
-
-            <!-- Minimum Wi-Fi uptime -->
-
-            <Grid Grid.Row="9">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="60"/>
-                    <ColumnDefinition Width="30"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Text="Minimum Wi-Fi uptime" Style="{StaticResource SettingLabelStyle}"/>
-                <TextBox x:Name="MinimumWiFiUptimeTextBox" Grid.Column="1" TextChanged="Setting_Changed"/>
-                <TextBlock Grid.Column="2" Text="sec" Margin="5,0,0,0" Foreground="#AFAFB5" VerticalAlignment="Center"/>
-
-                <TextBlock Grid.Column="3" Style="{StaticResource InfoIconStyle}">
-                    <TextBlock.ToolTip>
-                        <ToolTip Content="Minimum number of seconds NetShift must remain on Wi-Fi before it is allowed to switch back to Ethernet."/>
-                    </TextBlock.ToolTip>
-                </TextBlock>
-            </Grid>
-
+        <Grid x:Name="SettingsPanel" Grid.Row="1" Grid.Column="2">
+            <Border Style="{StaticResource Card}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,16">
+                            <TextBlock Text="Settings" FontSize="19" FontWeight="SemiBold"/>
+                            <Button x:Name="SaveButton" Content="Save" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right" Visibility="Collapsed" Click="SaveButton_Click"/>
+                        </Grid>
+                        <StackPanel Margin="0,0,0,12">
+                            <TextBlock Text="Wi-Fi adapter" Style="{StaticResource Caption}"/>
+                            <TextBox x:Name="WiFiNameTextBox" TextChanged="Setting_Changed" ToolTip="Exact Windows interface name" AutomationProperties.Name="Wi-Fi adapter"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,12">
+                            <TextBlock Text="Ethernet adapter" Style="{StaticResource Caption}"/>
+                            <TextBox x:Name="EthernetNameTextBox" TextChanged="Setting_Changed" ToolTip="Exact Windows interface name" AutomationProperties.Name="Ethernet adapter"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,12">
+                            <TextBlock Text="Connectivity target" Style="{StaticResource Caption}"/>
+                            <TextBox x:Name="PingTargetTextBox" TextChanged="Setting_Changed" ToolTip="Hostname or IP address to ping" AutomationProperties.Name="Connectivity target"/>
+                        </StackPanel>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="55"/>
+                                <ColumnDefinition Width="46"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Check interval" VerticalAlignment="Center" Foreground="#C2D0E2"/>
+                            <TextBox x:Name="CheckIntervalTextBox" Grid.Column="1" TextChanged="Setting_Changed" ToolTip="Seconds between automatic checks" AutomationProperties.Name="Check interval"/>
+                            <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center" Margin="7,0,0,0" Foreground="#A9B8CD" FontSize="11"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="55"/>
+                                <ColumnDefinition Width="46"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Failed checks" VerticalAlignment="Center" Foreground="#C2D0E2"/>
+                            <TextBox x:Name="FailureThresholdTextBox" Grid.Column="1" TextChanged="Setting_Changed" ToolTip="Consecutive failures before Wi-Fi failover" AutomationProperties.Name="Failed checks"/>
+                            <TextBlock Grid.Column="2" Text="checks" VerticalAlignment="Center" Margin="7,0,0,0" Foreground="#A9B8CD" FontSize="11"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="55"/>
+                                <ColumnDefinition Width="46"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Successful checks" VerticalAlignment="Center" Foreground="#C2D0E2"/>
+                            <TextBox x:Name="SuccessThresholdTextBox" Grid.Column="1" TextChanged="Setting_Changed" ToolTip="Consecutive successes before an Ethernet attempt" AutomationProperties.Name="Successful checks"/>
+                            <TextBlock Grid.Column="2" Text="checks" VerticalAlignment="Center" Margin="7,0,0,0" Foreground="#A9B8CD" FontSize="11"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="55"/>
+                                <ColumnDefinition Width="46"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Wi-Fi minimum uptime" VerticalAlignment="Center" Foreground="#C2D0E2"/>
+                            <TextBox x:Name="MinimumWiFiUptimeTextBox" Grid.Column="1" TextChanged="Setting_Changed" ToolTip="Minimum seconds on Wi-Fi before returning to Ethernet" AutomationProperties.Name="Wi-Fi minimum uptime"/>
+                            <TextBlock Grid.Column="2" Text="sec" VerticalAlignment="Center" Margin="7,0,0,0" Foreground="#A9B8CD" FontSize="11"/>
+                        </Grid>
+                        <Border Height="1" Background="#2B374A" Margin="0,8,0,10"/>
+                        <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start with Windows" Checked="StartWithWindows_Changed" Unchecked="StartWithWindows_Changed"/>
+                        <CheckBox x:Name="PreventAutoSwitchingCheckBox" Content="Prevent auto-switching" Checked="PreventAutoSwitching_Changed" Unchecked="PreventAutoSwitching_Changed"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
         </Grid>
-
-
-        <!-- =========================================================
-             GRAPH AREA
-             ========================================================= -->
-
-        <Grid x:Name="GraphArea" Grid.Column="4">
-
+        <Grid x:Name="GraphArea" Grid.Row="1" Grid.Column="4">
             <Grid.RowDefinitions>
                 <RowDefinition x:Name="MonitorHeaderRow" Height="0"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-
-
-            <!-- Charts -->
-
-            <Grid x:Name="ChartsPanel" Grid.Row="1">
-
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="8"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="16"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="8"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-
-
-                <!-- Throughput -->
-
-                <Grid Grid.Row="0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-
-                    <TextBlock Text="Network throughput" FontSize="14" FontWeight="SemiBold" Foreground="White"/>
-                    <TextBlock Grid.Column="1" Text="Mbps" FontSize="11" Foreground="#AFAFB5" VerticalAlignment="Bottom"/>
-                </Grid>
-
-                <lvc:CartesianChart x:Name="ThroughputChart" Grid.Row="2" LegendPosition="Top"/>
-
-
-                <!-- Ping -->
-
-                <Grid Grid.Row="4">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-
-                    <TextBlock Text="Ping" FontSize="14" FontWeight="SemiBold" Foreground="White"/>
-                    <TextBlock Grid.Column="1" Text="ms" FontSize="11" Foreground="#AFAFB5" VerticalAlignment="Bottom"/>
-                </Grid>
-
-                <lvc:CartesianChart x:Name="PingChart" Grid.Row="6" LegendPosition="Hidden"/>
-
-
-                <!-- GitHub -->
-
-                <TextBlock Grid.Row="7" HorizontalAlignment="Right" Margin="0,5,0,0" FontSize="11" Foreground="#AFAFB5">
-                    <Hyperlink NavigateUri="https://github.com/StianSundby/NetShift"
-                               RequestNavigate="Hyperlink_RequestNavigate">GitHub</Hyperlink>
-                </TextBlock>
-
-            </Grid>
-
-
-            <!-- Monitor Mode header -->
-
-            <Grid x:Name="MonitorHeader" Grid.Row="0" Visibility="Collapsed" Margin="0,0,0,12">
-
+            <Grid x:Name="MonitorHeader" Visibility="Collapsed" Margin="0,0,0,16">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="16"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-
-                <TextBlock Text="NETSHIFT MONITOR" FontSize="14" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
-
-                <TextBlock x:Name="MonitorStatusText"
-                           Grid.Column="2"
-                           Text="Checking network..."
-                           FontSize="12"
-                           Foreground="#AFAFB5"
-                           VerticalAlignment="Center"/>
-
-                <StackPanel x:Name="MonitorControls" Grid.Column="3" Orientation="Horizontal">
-                    <Button x:Name="AlwaysOnTopButton" Content="Pin" Width="54" Height="28" Margin="0,0,5,0" Click="AlwaysOnTopButton_Click"/>
-                    <Button Content="Full View" Width="72" Height="28" Margin="0,0,5,0" Click="FullViewButton_Click"/>
-                    <Button Content="−" Width="32" Height="28" Margin="0,0,5,0" FontSize="18" Click="MinimizeButton_Click"/>
-                    <Button Content="×" Width="32" Height="28" Click="MonitorExitButton_Click"/>
+                <TextBlock x:Name="MonitorStatusText" Text="Checking network..." VerticalAlignment="Center" Foreground="#A9B8CD"/>
+                <StackPanel x:Name="MonitorControls" Grid.Column="1" Orientation="Horizontal">
+                    <Button x:Name="AlwaysOnTopButton" Content="Pin" Click="AlwaysOnTopButton_Click" Margin="0,0,6,0"/>
+                    <Button Content="Full View" Click="FullViewButton_Click" Margin="0,0,6,0"/>
+                    <Button Content="−" Width="36" Padding="0" ToolTip="Minimize" Click="MinimizeButton_Click" Margin="0,0,6,0"/>
+                    <Button Content="×" Width="36" Padding="0" ToolTip="Exit NetShift" Click="MonitorExitButton_Click"/>
                 </StackPanel>
-
             </Grid>
-
+            <Grid x:Name="ChartsPanel" Grid.Row="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="16"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="28"/>
+                </Grid.RowDefinitions>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid Margin="0,0,0,14">
+                            <TextBlock Text="Throughput" FontSize="17" FontWeight="SemiBold"/>
+                            <TextBlock Text="Mbps" HorizontalAlignment="Right" Foreground="#A9B8CD" VerticalAlignment="Center"/>
+                        </Grid>
+                        <lvc:CartesianChart x:Name="ThroughputChart" Grid.Row="1" Background="#151D2A" LegendPosition="Top"/>
+                    </Grid>
+                </Border>
+                <Border Grid.Row="2" Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid Margin="0,0,0,14">
+                            <TextBlock Text="Latency" FontSize="17" FontWeight="SemiBold"/>
+                            <TextBlock Text="ms" HorizontalAlignment="Right" Foreground="#A9B8CD" VerticalAlignment="Center"/>
+                        </Grid>
+                        <lvc:CartesianChart x:Name="PingChart" Grid.Row="1" Background="#151D2A" LegendPosition="Hidden"/>
+                    </Grid>
+                </Border>
+                <TextBlock Grid.Row="3" HorizontalAlignment="Right" VerticalAlignment="Bottom" FontSize="11"><Hyperlink NavigateUri="https://github.com/StianSundby/NetShift" RequestNavigate="Hyperlink_RequestNavigate">View on GitHub ↗</Hyperlink></TextBlock>
+            </Grid>
         </Grid>
-
-
-        <!-- =========================================================
-             NORMAL WINDOW CONTROLS
-             These deliberately sit OUTSIDE GraphArea.
-             ========================================================= -->
-
-        <StackPanel x:Name="NormalWindowControls"
-                    Grid.Column="4"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Top"
-                    Panel.ZIndex="10">
-
-            <Button Content="−" Width="32" Height="28" Margin="0,0,5,0" FontSize="18" Click="MinimizeButton_Click"/>
-            <Button Content="×" Width="32" Height="28" Click="CloseButton_Click"/>
-
-        </StackPanel>
-
     </Grid>
-
 </Window>
