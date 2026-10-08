@@ -7,7 +7,7 @@ namespace NetShiftST.Utils
     /// </summary>
     public static class Logger
     {
-        private static readonly string LogFile = Path.Combine(AppContext.BaseDirectory, "log.txt");
+        private static readonly string LogFile = AppPaths.LogFile;
 
         /// <summary>
         /// Appends a message to the log file with a timestamp in local time
