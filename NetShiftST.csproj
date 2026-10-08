@@ -7,10 +7,30 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
 	<UseWindowsForms>true</UseWindowsForms>
+	<ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
+
+	<PropertyGroup>
+		<ApplicationIcon>res\ico\NetShift.ico</ApplicationIcon>
+		<Version>0.5.0</Version>
+		<Product>NetShift</Product>
+		<Description>Automatic Ethernet and Wi-Fi switching</Description>
+	</PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.5" />
   </ItemGroup>
+	
+	
+
+	<ItemGroup>
+  <None Update="res\ico\*.ico">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+  </None>
+</ItemGroup>
+
+	
 
 </Project>
