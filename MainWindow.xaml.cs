@@ -5,6 +5,8 @@ using NetShiftST.Core;
 using NetShiftST.Utils;
 using System.Net;
 using SkiaSharp;
+using LiveChartsCore.Measure;
+using System.Windows.Input;
 using System.Collections.ObjectModel;
 using System.Net.NetworkInformation;
 using System.Windows;
@@ -30,14 +32,21 @@ namespace NetShiftST
         private readonly DispatcherTimer _networkTimer;
         private readonly DispatcherTimer _feedbackTimer;
 
-        private readonly ObservableCollection<ObservableValue> _downloadValues = [];
-        private readonly ObservableCollection<ObservableValue> _uploadValues = [];
-        private readonly ObservableCollection<ObservableValue> _pingValues = [];
+        private readonly ObservableCollection<DateTimePoint> _downloadValues = [];
+        private readonly ObservableCollection<DateTimePoint> _uploadValues = [];
+        private readonly ObservableCollection<DateTimePoint> _pingValues = [];
+
+        private readonly Axis _throughputTimeAxis = CreateTimeAxis();
+        private readonly Axis _pingTimeAxis = CreateTimeAxis();
+        private static readonly TimeSpan HistoryDuration = TimeSpan.FromMinutes(15);
+        private static readonly TimeSpan LiveDuration = TimeSpan.FromMinutes(1);
+        private bool _followLive = true;
+        private bool _sampling;
+
         private NetworkInterface? _currentAdapter;
         private NetworkInterface? _routedAdapter;
         private long _previousBytesReceived;
         private long _previousBytesSent;
-        private IconState _currentNetworkState = IconState.Offline;
         private double? _currentPing;
 
         private bool _isLoadingUI = true;
@@ -107,32 +116,30 @@ namespace NetShiftST
             ThroughputChart.LegendTextPaint = new SolidColorPaint(SKColor.Parse("#A9B8CD"));
             ThroughputChart.Series =
             [
-                new LineSeries<ObservableValue>
+                new LineSeries<DateTimePoint>
                 {
                     Name = "Download",
                     Stroke = new SolidColorPaint(SKColor.Parse("#67E8CA"), 2.5f),
                     Values = _downloadValues,
                     GeometrySize = 0,
-                    Fill = null
+                    Fill = null,
+                    XToolTipLabelFormatter = point => FormatTimestamp(point.Coordinate.SecondaryValue),
+                    YToolTipLabelFormatter = point => $"{point.Coordinate.PrimaryValue:0.00} Mbps"
                 },
 
-                new LineSeries<ObservableValue>
+                new LineSeries<DateTimePoint>
                 {
                     Name = "Upload",
                     Stroke = new SolidColorPaint(SKColor.Parse("#81A7FF"), 2.5f),
                     Values = _uploadValues,
                     GeometrySize = 0,
-                    Fill = null
-                }
-             ];
-
-            ThroughputChart.XAxes =
-            [
-                new Axis
-                {
-                    IsVisible = false
+                    Fill = null,
+                    XToolTipLabelFormatter = point => FormatTimestamp(point.Coordinate.SecondaryValue),
+                    YToolTipLabelFormatter = point => $"{point.Coordinate.PrimaryValue:0.00} Mbps"
                 }
             ];
+
+            ThroughputChart.XAxes = [_throughputTimeAxis];
 
             ThroughputChart.YAxes =
             [
@@ -149,23 +156,19 @@ namespace NetShiftST
 
             PingChart.Series =
             [
-                new LineSeries<ObservableValue>
+                new LineSeries<DateTimePoint>
                 {
                     Name = "Ping",
                     Stroke = new SolidColorPaint(SKColor.Parse("#C4A4FF"), 2.5f),
                     Values = _pingValues,
                     GeometrySize = 0,
-                    Fill = null
+                    Fill = null,
+                    XToolTipLabelFormatter = point => FormatTimestamp(point.Coordinate.SecondaryValue),
+                    YToolTipLabelFormatter = point => $"{point.Coordinate.PrimaryValue:0} ms"
                 }
             ];
 
-            PingChart.XAxes =
-            [
-                new Axis
-                {
-                    IsVisible = false
-                }
-            ];
+            PingChart.XAxes = [_pingTimeAxis];
 
             PingChart.YAxes =
             [
@@ -179,6 +182,50 @@ namespace NetShiftST
                     Labeler = value => $"{value:0}"
                 }
             ];
+
+            ThroughputChart.ZoomMode = ZoomAndPanMode.X;
+            PingChart.ZoomMode = ZoomAndPanMode.X;
+
+            UpdateLiveWindow();
+        }
+
+        private static Axis CreateTimeAxis()
+        {
+            return new Axis
+            {
+                Labeler = value => FormatTimestamp(value),
+                UnitWidth = TimeSpan.FromSeconds(1).Ticks,
+                MinStep = TimeSpan.FromSeconds(1).Ticks,
+                LabelsPaint = new SolidColorPaint(SKColor.Parse("#A9B8CD")),
+                SeparatorsPaint = new SolidColorPaint(SKColor.Parse("#2B374A")),
+                TextSize = 10
+            };
+        }
+
+        private static string FormatTimestamp(double ticks)
+        {
+            if (!double.IsFinite(ticks) || ticks < DateTime.MinValue.Ticks || ticks >= DateTime.MaxValue.Ticks)
+            {
+                return "";
+            }
+
+            return new DateTime((long)ticks, DateTimeKind.Utc).ToLocalTime().ToString("HH:mm:ss");
+        }
+
+        private void UpdateLiveWindow()
+        {
+            if (!_followLive)
+                return;
+
+            DateTime now = DateTime.UtcNow;
+            double start = (now - LiveDuration).Ticks;
+            double end = now.Ticks;
+
+            _throughputTimeAxis.MinLimit = start;
+            _throughputTimeAxis.MaxLimit = end;
+
+            _pingTimeAxis.MinLimit = start;
+            _pingTimeAxis.MaxLimit = end;
         }
         #endregion
 
@@ -309,8 +356,25 @@ namespace NetShiftST
         #region Monitoring
         private async void NetworkTimer_Tick(object? sender, EventArgs e)
         {
-            UpdateThroughput();
-            await UpdatePingAsync();
+            if (_sampling)
+                return;
+
+            _sampling = true;
+
+            try
+            {
+                UpdateThroughput();
+                await UpdatePingAsync();
+                UpdateLiveWindow();
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Chart sampling failed: {ex.Message}");
+            }
+            finally
+            {
+                _sampling = false;
+            }
         }
 
         private NetworkInterface? FindActiveAdapter()
@@ -342,18 +406,25 @@ namespace NetShiftST
             double downloadMbps = (received - _previousBytesReceived) * 8.0 / 1000000.0;
             double uploadMbps = (sent - _previousBytesSent) * 8.0 / 1000000.0;
 
-            AddValue(_downloadValues, downloadMbps);
-            AddValue(_uploadValues, uploadMbps);
+            DateTime timestamp = DateTime.UtcNow;
+
+            AddValue(_downloadValues, downloadMbps, timestamp);
+            AddValue(_uploadValues, uploadMbps, timestamp);
 
             _previousBytesReceived = received;
             _previousBytesSent = sent;
         }
 
-        private static void AddValue(ObservableCollection<ObservableValue> collection, double value)
+        private static void AddValue(ObservableCollection<DateTimePoint> collection, double? value, DateTime? timestamp = null)
         {
-            collection.Add(new ObservableValue(value));
-            if (collection.Count > 60)
+            DateTime now = timestamp ?? DateTime.UtcNow;
+            collection.Add(new DateTimePoint(now, value));
+            DateTime cutoff = now - HistoryDuration;
+
+            while (collection.Count > 0 && collection[0].DateTime < cutoff)
+            {
                 collection.RemoveAt(0);
+            }
         }
 
         private async Task UpdatePingAsync()
@@ -371,11 +442,7 @@ namespace NetShiftST
                 else
                 {
                     var addresses = await Dns.GetHostAddressesAsync(target);
-
-                    address = addresses.FirstOrDefault(
-                        a => a.AddressFamily ==
-                            System.Net.Sockets.AddressFamily.InterNetwork)
-                        ?? addresses.First();
+                    address = addresses.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) ?? addresses.First();
                 }
 
                 _routedAdapter = NetworkTools.FindRoutedAdapter(address);
@@ -394,7 +461,7 @@ namespace NetShiftST
                 else
                 {
                     _currentPing = null;
-                    AddValue(_pingValues, 0);
+                    AddValue(_pingValues, null);
                 }
 
                 UpdateDetectedNetworkStatus();
@@ -406,7 +473,7 @@ namespace NetShiftST
                 _currentPing = null;
                 _routedAdapter = null;
 
-                AddValue(_pingValues, 0);
+                AddValue(_pingValues, null);
                 UpdateDetectedNetworkStatus();
             }
         }
@@ -425,7 +492,6 @@ namespace NetShiftST
         {
             if (_routedAdapter == null)
             {
-                _currentNetworkState = IconState.Offline;
                 NetworkStatusText.Text = "Connection unknown";
                 NetworkDetailText.Text = "Could not identify the active route.";
                 MonitorStatusText.Text = "Unknown  •  -- ms";
@@ -438,7 +504,6 @@ namespace NetShiftST
             {
                 case NetworkInterfaceType.Wireless80211:
                     networkName = "Wi-Fi";
-                    _currentNetworkState = IconState.WiFi;
                     break;
 
                 case NetworkInterfaceType.Ethernet:
@@ -446,13 +511,10 @@ namespace NetShiftST
                 case NetworkInterfaceType.FastEthernetFx:
                 case NetworkInterfaceType.FastEthernetT:
                     networkName = "Ethernet";
-                    _currentNetworkState = IconState.Ethernet;
                     break;
 
                 default:
-                    //VPNs and other interfaces should not be labelled Ethernet
                     networkName = _routedAdapter.Name;
-                    _currentNetworkState = IconState.Offline;
                     break;
             }
 
@@ -610,6 +672,29 @@ namespace NetShiftST
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             Close();
+        }
+
+        private void Chart_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            PauseLiveFollowing();
+        }
+
+        private void Chart_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            PauseLiveFollowing();
+        }
+
+        private void PauseLiveFollowing()
+        {
+            _followLive = false;
+            LiveButton.Content = "Return to live";
+        }
+
+        private void LiveButton_Click(object sender, RoutedEventArgs e)
+        {
+            _followLive = true;
+            LiveButton.Content = "Live";
+            UpdateLiveWindow();
         }
         #endregion
 
