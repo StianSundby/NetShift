@@ -1,76 +1,60 @@
-﻿namespace NetShift.Utils
+﻿using System.IO;
+using NetShiftST.Core;
+
+namespace NetShiftST.Utils
 {
+    /// <summary>
+    /// Loads network status icons with a system icon fallback.
+    /// </summary>
     internal sealed class IconManager : IDisposable
     {
-        private readonly string _iconDir;
-        private readonly Dictionary<string, Icon> _iconCache = new(StringComparer.OrdinalIgnoreCase);
-        private bool _disposed;
+        private readonly Dictionary<IconState, Icon> _icons = [];
 
+        /// <summary>
+        /// Loads the Ethernet, Wi-Fi, and offline icons from the specified directory
+        /// </summary>
+        /// <param name="iconDirectory">The directory containing the icon files</param>
         public IconManager(string iconDirectory)
         {
-            _iconDir = iconDirectory ?? throw new ArgumentNullException(nameof(iconDirectory));
+            Load(IconState.Ethernet, Path.Combine(iconDirectory, "green.ico"));
+            Load(IconState.WiFi, Path.Combine(iconDirectory, "yellow.ico"));
+            Load(IconState.Offline, Path.Combine(iconDirectory, "red.ico"));
         }
 
-        public void Preload(string fileName)
-        {
-            if (string.IsNullOrWhiteSpace(fileName)) return;
+        /// <summary>
+        /// Gets the icon for the specified network state, falling back to the system warning icon if no matching icon was loaded.
+        /// </summary>
+        /// <param name="state">The network state to represent</param>
+        /// <returns>
+        /// An icon managed by this instance.
+        /// </returns>
+        /// <remarks>
+        /// The caller should not dispose the returned icon.
+        /// </remarks>
+        public Icon Get(IconState state) =>
+            _icons.TryGetValue(state, out var icon) ? icon : SystemIcons.Warning;
 
+        private void Load(IconState state, string path)
+        {
             try
             {
-                string path = Path.Combine(_iconDir, fileName);
                 if (File.Exists(path))
-                {
-                    if (!_iconCache.ContainsKey(fileName))
-                        _iconCache[fileName] = new Icon(path);
-                }
+                    _icons[state] = new Icon(path);
             }
-            catch
+            catch (Exception ex)
             {
-                //ignore load errors. Fallback used later
+                Logger.Log($"Could not load icon '{path}': {ex.Message}");
             }
         }
 
-        public Icon GetIconForState(string state)
-        {
-            state ??= string.Empty;
-
-            string fileName = state.ToLower() switch
-            {
-                "ethernet" => "green.ico",
-                "wifi" => "yellow.ico",
-                "none" => "red.ico",
-                _ => "red.ico"
-            };
-
-            if (_iconCache.TryGetValue(fileName, out var icon))
-                return icon;
-
-            //try lazy load if not preloaded
-            try
-            {
-                string path = Path.Combine(_iconDir, fileName);
-                if (File.Exists(path))
-                {
-                    var newIcon = new Icon(path);
-                    _iconCache[fileName] = newIcon;
-                    return newIcon;
-                }
-            }
-            catch { }
-
-            return SystemIcons.Warning;
-        }
-
+        /// <summary>
+        /// Disposes all icons loaded by this instance
+        /// </summary>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
-
-            foreach (var kv in _iconCache)
-            {
-                try { kv.Value.Dispose(); } catch { }
-            }
-            _iconCache.Clear();
+            foreach (var icon in _icons.Values)
+                icon.Dispose();
+            _icons.Clear();
         }
     }
 }

@@ -1,214 +1,210 @@
-﻿using NetShift.Core;
+﻿using System.IO;
+using NetShiftST.Core;
 
-namespace NetShift.Utils
+namespace NetShiftST.Utils;
+
+/// <summary>
+/// Botification icon and tray actions for network and startup control
+/// </summary>
+public class TrayUI : IDisposable
 {
-    public class TrayUI : IDisposable
+    #region Properties
+    private readonly NetworkManager _network;
+    private readonly IconManager _icons;
+    private readonly StartupManager _startup;
+    private readonly ToolStripMenuItem _startupItem;
+    private readonly NotifyIcon _trayIcon;
+    private readonly ToolStripMenuItem _forceEthernetItem;
+    private readonly ToolStripMenuItem _forceWifiItem;
+    private readonly ToolStripMenuItem _preventItem;
+    private readonly MainWindow _mainWindow;
+    #endregion
+
+    public TrayUI(NetworkManager network, StartupManager startup, MainWindow mainWindow)
     {
-        private readonly NotifyIcon _trayIcon;
-        private readonly NetworkManager _networkManager;
-        private readonly SynchronizationContext _syncContext;
-        private bool _disposed;
+        _network = network;
+        _startup = startup;
+        _mainWindow = mainWindow;
+        _icons = new IconManager(Path.Combine(AppContext.BaseDirectory, "res", "ico"));
 
-        private readonly ToolStripMenuItem? _forceEthernetItem;
-        private readonly ToolStripMenuItem? _forceWifiItem;
-        private readonly ToolStripMenuItem? _preventSwitchItem;
-        private readonly ToolStripMenuItem? _startupItem;
-
-        private readonly IconManager _iconManager;
-        private readonly StartupManager _startupManager;
-
-        public TrayUI(NetworkManager network)
+        _trayIcon = new NotifyIcon
         {
-            _networkManager = network ?? throw new ArgumentNullException(nameof(network));
-            _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
+            Text = "NetShift",
+            Icon = _icons.Get(IconState.Offline),
+            Visible = true
+        };
 
-            var icons = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "res", "ico");
-            _iconManager = new IconManager(icons);
-            _iconManager.Preload("red.ico");
-            _iconManager.Preload("green.ico");
-            _iconManager.Preload("yellow.ico");
+        _preventItem = new ToolStripMenuItem("Prevent Auto-Switching")
+        {
+            CheckOnClick = true,
+            Checked = _network.PreventAutoSwitching
+        };
 
-            _startupManager = new StartupManager("NetShift");
+        _preventItem.Click += (_, _) =>
+        {
+            _network.PreventAutoSwitching = _preventItem.Checked;
+            ShowBalloon("NetShift", _preventItem.Checked ? "Automatic switching disabled." : "Automatic switching enabled.");
+        };
 
-            _trayIcon = new NotifyIcon
-            {
-                Text = "NetShift",
-                Icon = _iconManager.GetIconForState("none"),
-                Visible = true
-            };
+        _startupItem = new ToolStripMenuItem("Start with Windows")
+        {
+            CheckOnClick = true,
+            Checked = _startup.IsStartupEnabled()
+        };
 
-            var menu = new ContextMenuStrip();
+        _startupItem.Click += (_, _) =>
+            OnStartupClicked(_startupItem);
 
-            _preventSwitchItem = new ToolStripMenuItem("Prevent Auto-Switching")
-            {
-                CheckOnClick = true,
-                Checked = _networkManager.PreventAutoSwitching
-            };
-            _preventSwitchItem.Click += OnPreventSwitchClicked;
+        _forceEthernetItem = new ToolStripMenuItem("Force Ethernet", null, async (_, _) =>
+            await ForceAsync(ethernet: true));
 
-            _startupItem = new ToolStripMenuItem("Start with Windows")
-            {
-                CheckOnClick = true,
-                Checked = _startupManager.IsStartupEnabled()
-            };
-            _startupItem.Click += OnStartupClicked;
+        _forceWifiItem = new ToolStripMenuItem("Force Wi-Fi", null, async (_, _) =>
+            await ForceAsync(ethernet: false));
 
-            _forceEthernetItem = new ToolStripMenuItem("Force Ethernet", null, OnForceEthernetClicked);
-            _forceWifiItem = new ToolStripMenuItem("Force Wi-Fi", null, OnForceWifiClicked);
+        var exitItem = new ToolStripMenuItem("Exit", null, (_, _) =>
+            ExitApplication());
 
-            menu.Items.Add(_preventSwitchItem);
-            menu.Items.Add(_startupItem);
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add(_forceEthernetItem);
-            menu.Items.Add(_forceWifiItem);
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add(new ToolStripMenuItem("Exit", null, (s, e) => { _trayIcon.Visible = false; Application.Exit(); }));
+        var openItem = new ToolStripMenuItem("Open NetShift", null, (_, _) =>
+            ShowMainWindow());
 
-            _trayIcon.ContextMenuStrip = menu;
+        BuildContextMenu(openItem, exitItem);
 
-            _networkManager.StatusChanged += OnStatusChanged;
-            _networkManager.IconChanged += OnIconChanged;
+        _trayIcon.DoubleClick += (_, _) => ShowMainWindow();
+        _network.StatusChanged += OnStatusChanged;
+        _network.IconChanged += OnIconChanged;
+        _network.PreventAutoSwitchingChanged += OnPreventAutoSwitchingChanged;
+        _startup.StartupChanged += OnStartupChanged;
+    }
+
+    private void BuildContextMenu(ToolStripMenuItem openItem, ToolStripMenuItem exitItem)
+    {
+        var menu = new ContextMenuStrip();
+        menu.Items.Add(openItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(_preventItem);
+        menu.Items.Add(_startupItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(_forceEthernetItem);
+        menu.Items.Add(_forceWifiItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(exitItem);
+        _trayIcon.ContextMenuStrip = menu;
+    }
+
+    #region User actions
+    private async Task ForceAsync(bool ethernet)
+    {
+        SetForceItemsEnabled(false);
+        try
+        {
+            await (ethernet ? _network.ForceEthernetAsync() : _network.ForceWiFiAsync());
         }
-
-        private void OnStatusChanged(string title, string message)
+        catch (Exception ex)
         {
-            _syncContext.Post(_ =>
-            {
-                try { _trayIcon.ShowBalloonTip(2000, title, message, ToolTipIcon.Info); }
-                catch { }
-            }, null);
+            Logger.Log($"Force {(ethernet ? "Ethernet" : "Wi-Fi")} error: {ex.Message}");
         }
-
-        private void OnIconChanged(string state)
+        finally
         {
-            _syncContext.Post(_ =>
-            {
-                try { _trayIcon.Icon = _iconManager.GetIconForState(state); }
-                catch { }
-            }, null);
-        }
-
-        private async void OnForceEthernetClicked(object? sender, EventArgs e)
-        {
-            try
-            {
-                SetForceItemsEnabled(false);
-                await _networkManager.ForceEthernet();
-            }
-            catch (Exception ex)
-            {
-                Logger.Log($"ForceEthernet error: {ex.Message}");
-            }
-            finally
-            {
-                SetForceItemsEnabled(true);
-            }
-        }
-
-        private async void OnForceWifiClicked(object? sender, EventArgs e)
-        {
-            try
-            {
-                SetForceItemsEnabled(false);
-                await _networkManager.ForceWiFi();
-            }
-            catch (Exception ex)
-            {
-                Logger.Log($"ForceWiFi error: {ex.Message}");
-            }
-            finally
-            {
-                SetForceItemsEnabled(true);
-            }
-        }
-
-        private void OnPreventSwitchClicked(object? sender, EventArgs e)
-        {
-            try
-            {
-                if (_preventSwitchItem == null) return;
-                _networkManager.PreventAutoSwitching = _preventSwitchItem.Checked;
-
-                var message = _preventSwitchItem.Checked ? "Automatic switching disabled." : "Automatic switching enabled.";
-                _syncContext.Post(_ =>
-                {
-                    try { _trayIcon.ShowBalloonTip(1500, "NetShift", message, ToolTipIcon.Info); }
-                    catch { }
-                }, null);
-            }
-            catch (Exception ex)
-            {
-                Logger.Log($"PreventSwitchClicked error: {ex.Message}");
-            }
-        }
-
-        private void OnStartupClicked(object? sender, EventArgs e)
-        {
-            try
-            {
-                if (_startupItem == null) return;
-                bool startWithWindows = _startupItem.Checked;
-                if (_startupManager.SetStartupEnabled(startWithWindows))
-                {
-                    var message = startWithWindows ? "NetShift will start with Windows." : "NetShift will not start with Windows.";
-                    _syncContext.Post(_ =>
-                    {
-                        try { _trayIcon.ShowBalloonTip(1500, "NetShift", message, ToolTipIcon.Info); }
-                        catch { }
-                    }, null);
-                }
-                else
-                {
-                    _startupItem.Checked = !startWithWindows;
-                    _syncContext.Post(_ =>
-                    {
-                        try { _trayIcon.ShowBalloonTip(1500, "NetShift", "Failed to update startup setting.", ToolTipIcon.Warning); }
-                        catch { }
-                    }, null);
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Log($"OnStartupClicked error: {ex.Message}");
-            }
-        }
-
-        private void SetForceItemsEnabled(bool enabled)
-        {
-            _syncContext.Post(_ =>
-            {
-                try
-                {
-                    if (_forceEthernetItem != null) _forceEthernetItem.Enabled = enabled;
-                    if (_forceWifiItem != null) _forceWifiItem.Enabled = enabled;
-                }
-                catch { }
-            }, null);
-        }
-
-        public void Dispose()
-        {
-            if (_disposed) return;
-            _disposed = true;
-
-            try
-            {
-                _networkManager.StatusChanged -= OnStatusChanged;
-                _networkManager.IconChanged -= OnIconChanged;
-
-                if (_trayIcon != null)
-                {
-                    _trayIcon.Visible = false;
-                    _trayIcon.ContextMenuStrip?.Dispose();
-                    _trayIcon.Dispose();
-                }
-
-                _iconManager.Dispose();
-            }
-            catch (Exception ex)
-            {
-                Logger.Log($"TrayUI.Dispose error: {ex.Message}");
-            }
+            SetForceItemsEnabled(true);
         }
     }
+
+    private void OnStartupClicked(ToolStripMenuItem item)
+    {
+        bool wanted = item.Checked;
+        if (_startup.SetStartupEnabled(wanted))
+        {
+            ShowBalloon("NetShift", wanted ? "NetShift will start with Windows." : "NetShift will not start with Windows.");
+        }
+        else
+        {
+            item.Checked = !wanted;
+            ShowBalloon("NetShift", "Failed to update startup setting.", ToolTipIcon.Warning);
+        }
+    }
+
+    private void SetForceItemsEnabled(bool enabled)
+    {
+        _forceEthernetItem.Enabled = enabled;
+        _forceWifiItem.Enabled = enabled;
+    }
+
+    private void ShowMainWindow()
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            _mainWindow.Show();
+
+            if (_mainWindow.WindowState == System.Windows.WindowState.Minimized)
+                _mainWindow.WindowState = System.Windows.WindowState.Normal;
+
+            _mainWindow.Activate();
+        });
+    }
+
+    private void ExitApplication()
+    {
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            _mainWindow.ExitApplication();
+        });
+    }
+    #endregion
+
+    #region Event handlers
+    private void OnPreventAutoSwitchingChanged(bool enabled)
+    {
+        if (_trayIcon.ContextMenuStrip?.InvokeRequired == true)
+        {
+            _trayIcon.ContextMenuStrip.Invoke(() =>
+            {
+                _preventItem.Checked = enabled;
+            });
+            return;
+        }
+
+        _preventItem.Checked = enabled;
+    }
+
+    private void OnStatusChanged(string title, string message) =>
+        ShowBalloon(title, message);
+
+    private void OnIconChanged(IconState state) =>
+        _trayIcon.Icon = _icons.Get(state);
+
+    private void OnStartupChanged(bool enabled)
+    {
+        if (_trayIcon.ContextMenuStrip?.InvokeRequired == true)
+        {
+            _trayIcon.ContextMenuStrip.Invoke(new Action(() =>
+            {
+                _startupItem.Checked = enabled;
+            }));
+            return;
+        }
+
+        _startupItem.Checked = enabled;
+    }
+
+    private void ShowBalloon(string title, string message, ToolTipIcon icon = ToolTipIcon.Info) =>
+        _trayIcon.ShowBalloonTip(2000, title, message, icon);
+    #endregion
+
+    #region Disposal
+    public void Dispose()
+    {
+        _network.StatusChanged -= OnStatusChanged;
+        _network.IconChanged -= OnIconChanged;
+        _network.PreventAutoSwitchingChanged -= OnPreventAutoSwitchingChanged;
+        _startup.StartupChanged -= OnStartupChanged;
+
+        _trayIcon.Visible = false;
+        _trayIcon.ContextMenuStrip?.Dispose();
+        _trayIcon.Dispose();
+        _icons.Dispose();
+
+        GC.SuppressFinalize(this);
+    }
+    #endregion
+
 }
