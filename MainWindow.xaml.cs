@@ -3,6 +3,7 @@ using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using NetShiftST.Core;
 using NetShiftST.Utils;
+using System.Net;
 using SkiaSharp;
 using System.Collections.ObjectModel;
 using System.Net.NetworkInformation;
@@ -33,6 +34,7 @@ namespace NetShiftST
         private readonly ObservableCollection<ObservableValue> _uploadValues = [];
         private readonly ObservableCollection<ObservableValue> _pingValues = [];
         private NetworkInterface? _currentAdapter;
+        private NetworkInterface? _routedAdapter;
         private long _previousBytesReceived;
         private long _previousBytesSent;
         private IconState _currentNetworkState = IconState.Offline;
@@ -313,17 +315,7 @@ namespace NetShiftST
 
         private NetworkInterface? FindActiveAdapter()
         {
-            var ethernet = NetworkTools.FindAdapter(_config.EthernetName);
-
-            if (ethernet?.OperationalStatus == OperationalStatus.Up)
-                return ethernet;
-
-            var wifi = NetworkTools.FindAdapter(_config.WiFiName);
-
-            if (wifi?.OperationalStatus == OperationalStatus.Up)
-                return wifi;
-
-            return null;
+            return _routedAdapter?.OperationalStatus == OperationalStatus.Up ? _routedAdapter : null;
         }
 
         private void UpdateThroughput()
@@ -366,12 +358,34 @@ namespace NetShiftST
 
         private async Task UpdatePingAsync()
         {
-            string target = _config.PingTarget;
-
             try
             {
+                string target = _config.PingTarget;
+
+                IPAddress address;
+
+                if (IPAddress.TryParse(target, out var parsedAddress))
+                {
+                    address = parsedAddress;
+                }
+                else
+                {
+                    var addresses = await Dns.GetHostAddressesAsync(target);
+
+                    address = addresses.FirstOrDefault(
+                        a => a.AddressFamily ==
+                            System.Net.Sockets.AddressFamily.InterNetwork)
+                        ?? addresses.First();
+                }
+
+                _routedAdapter = NetworkTools.FindRoutedAdapter(address);
+
                 using var ping = new Ping();
-                PingReply reply = await ping.SendPingAsync(target, 1000);
+                PingReply reply = await ping.SendPingAsync(address, 1000);
+
+                //refresh in case routing changed while the probe was running
+                _routedAdapter = NetworkTools.FindRoutedAdapter(address);
+
                 if (reply.Status == IPStatus.Success)
                 {
                     _currentPing = reply.RoundtripTime;
@@ -383,55 +397,69 @@ namespace NetShiftST
                     AddValue(_pingValues, 0);
                 }
 
-                UpdateMonitorStatus();
+                UpdateDetectedNetworkStatus();
             }
-            catch
+            catch (Exception ex)
             {
+                Logger.Log($"Network observation failed: {ex.Message}");
+
                 _currentPing = null;
+                _routedAdapter = null;
+
                 AddValue(_pingValues, 0);
-                UpdateMonitorStatus();
+                UpdateDetectedNetworkStatus();
             }
         }
 
         private void UpdateMonitorStatus()
         {
-            string network = _currentNetworkState switch
-            {
-                IconState.Ethernet => "Ethernet",
-                IconState.WiFi => "Wi-Fi",
-                _ => "Offline"
-            };
-
-            string ping = _currentPing.HasValue ? $"{_currentPing.Value:0} ms" : "-- ms";
-            MonitorStatusText.Text = $"{network}  •  {ping}";
+            UpdateDetectedNetworkStatus();
         }
 
         private void OnNetworkStateChanged(IconState state)
         {
-            Dispatcher.Invoke(() =>
+            Dispatcher.Invoke(UpdateDetectedNetworkStatus);
+        }
+
+        private void UpdateDetectedNetworkStatus()
+        {
+            if (_routedAdapter == null)
             {
-                _currentNetworkState = state;
+                _currentNetworkState = IconState.Offline;
+                NetworkStatusText.Text = "Connection unknown";
+                NetworkDetailText.Text = "Could not identify the active route.";
+                MonitorStatusText.Text = "Unknown  •  -- ms";
+                return;
+            }
 
-                switch (state)
-                {
-                    case IconState.Ethernet:
-                        NetworkStatusText.Text = "Ethernet connected";
-                        NetworkDetailText.Text = _config.EthernetName;
-                        break;
+            string networkName;
 
-                    case IconState.WiFi:
-                        NetworkStatusText.Text = "Wi-Fi connected";
-                        NetworkDetailText.Text = _config.WiFiName;
-                        break;
+            switch (_routedAdapter.NetworkInterfaceType)
+            {
+                case NetworkInterfaceType.Wireless80211:
+                    networkName = "Wi-Fi";
+                    _currentNetworkState = IconState.WiFi;
+                    break;
 
-                    case IconState.Offline:
-                        NetworkStatusText.Text = "No connection";
-                        NetworkDetailText.Text = "Waiting for network...";
-                        break;
-                }
+                case NetworkInterfaceType.Ethernet:
+                case NetworkInterfaceType.GigabitEthernet:
+                case NetworkInterfaceType.FastEthernetFx:
+                case NetworkInterfaceType.FastEthernetT:
+                    networkName = "Ethernet";
+                    _currentNetworkState = IconState.Ethernet;
+                    break;
 
-                UpdateMonitorStatus();
-            });
+                default:
+                    //VPNs and other interfaces should not be labelled Ethernet
+                    networkName = _routedAdapter.Name;
+                    _currentNetworkState = IconState.Offline;
+                    break;
+            }
+
+            NetworkStatusText.Text = _currentPing.HasValue ? $"{networkName} connected" : $"{networkName} — probe failed";
+            NetworkDetailText.Text = _routedAdapter.Name;
+            string pingText = _currentPing.HasValue ? $"{_currentPing.Value:0} ms" : "-- ms";
+            MonitorStatusText.Text = $"{networkName}  •  {pingText}";
         }
 
         private void OnNetworkStatusChanged(string title, string message)

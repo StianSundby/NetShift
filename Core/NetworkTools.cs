@@ -1,6 +1,9 @@
 ﻿using NetShiftST.Utils;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
+using System.Net;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
 
 namespace NetShiftST.Core
 {
@@ -27,6 +30,50 @@ namespace NetShiftST.Core
             return adapters.FirstOrDefault(a => a.Name.Equals(configuredName, ignoreCase))
                 ?? adapters.FirstOrDefault(a => a.Name.Contains(configuredName, ignoreCase))
                 ?? adapters.FirstOrDefault(a => a.Description.Contains(configuredName, ignoreCase));
+        }
+
+        /// <summary>
+        /// Finds the adapter Windows routes traffic through for the specified address.
+        /// Supports IPv4 and IPv6.
+        /// </summary>
+        public static NetworkInterface? FindRoutedAdapter(IPAddress destination)
+        {
+            try
+            {
+                var socketAddress = new IPEndPoint(destination, 0).Serialize();
+                var addressBytes = new byte[socketAddress.Size];
+
+                for (int i = 0; i < socketAddress.Size; i++)
+                    addressBytes[i] = socketAddress[i];
+
+                uint result = GetBestInterfaceEx(
+                    addressBytes,
+                    out uint interfaceIndex);
+
+                if (result != 0)
+                {
+                    Logger.Log($"Route lookup failed with error {result}.");
+                    return null;
+                }
+
+                foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    var properties = adapter.GetIPProperties();
+
+                    int? index = destination.AddressFamily == AddressFamily.InterNetwork
+                        ? properties.GetIPv4Properties()?.Index
+                        : properties.GetIPv6Properties()?.Index;
+
+                    if (index.HasValue && index.Value == interfaceIndex)
+                        return adapter;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Could not detect routed adapter: {ex.Message}");
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -152,5 +199,8 @@ namespace NetShiftST.Core
                 Logger.Log($"Error running netsh {args}: {ex.Message}");
             }
         }
+
+        [DllImport("iphlpapi.dll", ExactSpelling = true)]
+        private static extern uint GetBestInterfaceEx(byte[] destination, out uint interfaceIndex);
     }
 }
